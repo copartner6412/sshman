@@ -20,7 +20,7 @@ func GenerateKeyPair(algorithm Algorithm, comment string, password string) (KeyP
 
 	privateKeyPEMBytes, err := encodePrivateKeyToPEMBytes(privateKey, comment, password)
 	if err != nil {
-		return KeyPair{}, fmt.Errorf("error encoding private key: %w", err)
+		return KeyPair{}, fmt.Errorf("error PEM-encoding private key: %w", err)
 	}
 
 	keyPair := KeyPair{

@@ -1,5 +1,7 @@
 package sshman
 
+/*
+
 import (
 	"bytes"
 	"errors"
@@ -176,3 +178,4 @@ func SSHHostWorks(sshAsset SSH, caPublicKey ssh.PublicKey) error {
 
 	return nil
 }
+*/

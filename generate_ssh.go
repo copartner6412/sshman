@@ -61,13 +61,16 @@ func GenerateSSH(subject Subject, ca KeyPair, certificateType CertificateType, a
 	}
 
 	certificate := &ssh.Certificate{
-		Key:             sshPublicKey,
-		Serial:          serial.Uint64(),
-		CertType:        getCertType(certificateType),
-		KeyId:           getKeyID(subject, certificateType),
-		ValidPrincipals: getPrincipals(subject, certificateType),
-		ValidAfter:      uint64(notBefore.Unix()),
-		ValidBefore:     uint64(notAfter.Unix()),
+		Key:         sshPublicKey,
+		Serial:      serial.Uint64(),
+		CertType:    getCertType(certificateType),
+		KeyId:       getKeyID(subject, certificateType),
+		ValidAfter:  uint64(notBefore.Unix()),
+		ValidBefore: uint64(notAfter.Unix()),
+	}
+
+	if certificateType == UserCert {
+		certificate.ValidPrincipals = getPrincipals(subject, certificateType)
 	}
 
 	if err := certificate.SignCert(rand.Reader, caPrivateKey); err != nil {

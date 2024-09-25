@@ -13,85 +13,49 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func FuzzGenerateSSH(f *testing.F) {
+func FuzzIssueSSH(f *testing.F) {
 	f.Fuzz(func(t *testing.T, seed1, seed2 uint64) {
 		t.Parallel()
-
 		r := rand.New(rand.NewPCG(seed1, seed2))
 
-		// Step 1: Generate pseudo-random inputs for user and host SSH assets
-		userInput, err := pseudorandomInputForGenerateSSH(r)
+		userInput, err := pseudorandomInputForIssueSSH(r, sshman.UserCert)
 		if err != nil {
 			t.Fatalf("error generating pseudo-random input for user: %v", err)
 		}
 
-		hostInput, err := pseudorandomInputForGenerateSSH(r)
+		hostInput, err := pseudorandomInputForIssueSSH(r, sshman.HostCert)
 		if err != nil {
 			t.Fatalf("error generating pseudo-random input for host: %v", err)
 		}
 
-		// Step 2: Generate user and host SSH assets using GenerateSSH
-		generatedUserSSHAsset, err := sshman.GenerateSSH(userInput.subject, userInput.ca, sshman.UserCert, userInput.algorithm, userInput.duration, userInput.password)
+		userSSHAsset, err := sshman.IssueSSH(userInput.ca, userInput.publicKey, userInput.privateKey, userInput.certificate, userInput.comment, userInput.password)
 		if err != nil {
-			t.Fatalf("error generating SSH for user: %v", err)
+			t.Fatalf("error issuing SSH asset for user: %v", err)
 		}
 
-		userSSHDir := t.TempDir()
-
-		if err := sshman.SaveSSH(generatedUserSSHAsset, userSSHDir); err != nil {
-			t.Fatalf("error saving user SSH asset: %v", err)
-		}
-
-		generatedHostSSHAsset, err := sshman.GenerateSSH(userInput.subject, hostInput.ca, sshman.HostCert, hostInput.algorithm, hostInput.duration, hostInput.password)
+		hostSSHAsset, err := sshman.IssueSSH(hostInput.ca, hostInput.publicKey, hostInput.privateKey, hostInput.certificate, hostInput.comment, hostInput.password)
 		if err != nil {
-			t.Fatalf("error generating SSH for host: %v", err)
+			t.Fatalf("error issuing SSH asset for host: %v", err)
 		}
 
-		hostSSHDir := t.TempDir()
-
-		if err := sshman.SaveSSH(generatedHostSSHAsset, hostSSHDir); err != nil {
-			t.Fatalf("error saving host SSH asset: %v", err)
-		}
-
-		userSSHAsset, err := sshman.LoadSSH(userSSHDir, string(generatedUserSSHAsset.PrivateKeyPassword))
+		userCAPublicKey, _, err := sshman.ParseKeyPair(userInput.ca)
 		if err != nil {
-			t.Fatalf("error loading user SSH asset: %v", err)
+			t.Fatalf("error parsing user CA key pair: %v", err)
 		}
 
-		hostSSHAsset, err := sshman.LoadSSH(hostSSHDir, string(generatedHostSSHAsset.PrivateKeyPassword))
+		hostCAPublicKey, _, err := sshman.ParseKeyPair(hostInput.ca)
 		if err != nil {
-			t.Fatalf("error loading host SSH asset: %v", err)
+			t.Fatalf("error parsing host CA key pair: %v", err)
 		}
 
-		userCertificate, _, _, _, err := ssh.ParseAuthorizedKey(userSSHAsset.Certificate)
+		_, userPrivateKey, userCertificate, err := sshman.ParseSSH(userSSHAsset)
 		if err != nil {
-			t.Fatalf("error parsing user certificate: %v", err)
+			t.Fatalf("error parsing user SSH asset: %v", err)
 		}
 
-		hostCertificat, _, _, _, err := ssh.ParseAuthorizedKey(hostSSHAsset.Certificate)
+		_, hostPrivateKey, hostCertificate, err := sshman.ParseSSH(hostSSHAsset)
 		if err != nil {
-			t.Fatalf("error parsing host certificate: %v", err)
-		}
-
-		userCAPublicKey, _, _, _, err := ssh.ParseAuthorizedKey(userInput.ca.PublicKey)
-		if err != nil {
-			t.Fatalf("error parsing user CA public key: %v", err)
-		}
-
-		hostCAPublicKey, _, _, _, err := ssh.ParseAuthorizedKey(hostInput.ca.PublicKey)
-		if err != nil {
-			t.Fatalf("error parsing host CA public key: %v", err)
-		}
-
-		// Step 3: Parse private keys for both user and host
-		userPrivateKey, err := ssh.ParsePrivateKeyWithPassphrase(userSSHAsset.PrivateKey, userSSHAsset.PrivateKeyPassword)
-		if err != nil {
-			t.Fatalf("failed to parse user private key: %v", err)
-		}
-
-		hostPrivateKey, err := ssh.ParsePrivateKeyWithPassphrase(hostSSHAsset.PrivateKey, hostSSHAsset.PrivateKeyPassword)
-		if err != nil {
-			t.Fatalf("failed to parse host private key: %v", err)
+			t.Fatalf("error parsing host SSH asset: %v", err)
 		}
 
 		userCertChecker := ssh.CertChecker{
@@ -100,7 +64,7 @@ func FuzzGenerateSSH(f *testing.F) {
 			},
 		}
 
-		hostCertPrivateKey, err := ssh.NewCertSigner(hostCertificat.(*ssh.Certificate), hostPrivateKey)
+		hostCertPrivateKey, err := ssh.NewCertSigner(hostCertificate, hostPrivateKey)
 		if err != nil {
 			t.Fatalf("error creating a ssh.CertSigner for host: %v", err)
 		}
@@ -111,6 +75,10 @@ func FuzzGenerateSSH(f *testing.F) {
 				permissions, err := userCertChecker.Authenticate(conn, key)
 				if err != nil {
 					return nil, fmt.Errorf("failed to authenticate user certificate: %v", err)
+				}
+				err = userCertChecker.CheckCert(userCertificate.ValidPrincipals[0], key.(*ssh.Certificate))
+				if err != nil {
+					return nil, fmt.Errorf("invalid user certificate: %v", err)
 				}
 				return permissions, nil
 			},
@@ -124,13 +92,13 @@ func FuzzGenerateSSH(f *testing.F) {
 			},
 		}
 
-		userCertPrivateKey, err := ssh.NewCertSigner(userCertificate.(*ssh.Certificate), userPrivateKey)
+		userCertPrivateKey, err := ssh.NewCertSigner(userCertificate, userPrivateKey)
 		if err != nil {
 			t.Fatalf("error creating a ssh.CertSigner for user: %v", err)
 		}
 
 		clientConfig := &ssh.ClientConfig{
-			User: userInput.subject.user,
+			User: userInput.certificate.ValidPrincipals[0],
 			Auth: []ssh.AuthMethod{ssh.PublicKeys(userCertPrivateKey)},
 			HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 				err := hostCertChecker.CheckHostKey(hostname, remote, key)
@@ -172,8 +140,6 @@ func FuzzGenerateSSH(f *testing.F) {
 		}()
 		wg.Wait()
 
-		time.Sleep(100 * time.Millisecond)
-
 		// Step 5: Create a client and check if it can connect to the server
 		conn, err := ssh.Dial("tcp", listener.Addr().String(), clientConfig)
 		if err != nil {
@@ -181,5 +147,7 @@ func FuzzGenerateSSH(f *testing.F) {
 			return
 		}
 		defer conn.Close()
+
 	})
+
 }

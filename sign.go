@@ -42,6 +42,10 @@ func Sign(subject Subject, ca KeyPair, publicKeyBytes []byte, certificateType Ce
 		ValidBefore: uint64(notAfter.Unix()),
 	}
 
+	if certificateType == UserCert {
+		certificate.ValidPrincipals = getPrincipals(subject, certificateType)
+	}
+
 	if err := certificate.SignCert(rand.Reader, caPrivateKey); err != nil {
 		return nil, fmt.Errorf("error signing certificate: %w", err)
 	}
