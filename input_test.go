@@ -20,14 +20,19 @@ const (
 
 type mockSubject struct {
 	user     string
+	port     uint16
 	domain   string
 	hostname string
 	ipv4     string
 	ipv6     string
 }
 
-func (s mockSubject) GetUser() []string {
+func (s mockSubject) GetSSHUser() []string {
 	return []string{s.user}
+}
+
+func (s mockSubject) GetSSHPort() uint16 {
+	return s.port
 }
 
 func (s mockSubject) GetDomain() []string {

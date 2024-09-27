@@ -10,7 +10,9 @@ import (
 // Subject defines the methods required to represent a host for which a TLS certificate will be generated.
 type Subject interface {
 	// GetCountry returns the Country for the TLS certificate.
-	GetUser() []string
+	GetSSHUser() []string
+
+	GetSSHPort() uint16
 
 	// GetDomain returns the domain for the TLS certificate.
 	GetDomain() []string
@@ -30,31 +32,34 @@ func ValidateSubject(subject Subject) error {
 		return errors.New("nil subject")
 	}
 
-	users := subject.GetUser()
-	domains := subject.GetDomain()
+	users := subject.GetSSHUser()
+	port := subject.GetSSHPort()
 	hostname := subject.GetHostname()
+	domains := subject.GetDomain()
 	ipv4s := subject.GetIPv4()
 	ipv6s := subject.GetIPv6()
 
 	if users == nil {
-		return errors.New("subject must contain at least one user")
+		return errors.New("subject must contain at least one SSH user")
 	}
 
-	if subject.GetDomain() == nil && subject.GetHostname() == "" && subject.GetIPv4() == nil && subject.GetIPv6() == nil {
-		return errors.New("subject must contain at least one of the following: hostname, IPv4 address, IPv6 address, or domain name")
+	if port == 0 {
+		return fmt.Errorf("port not specified")
+	}
+
+	if hostname == "" {
+		return fmt.Errorf("hostname not specified")
 	}
 
 	var errs []error
 
+	if err := validate.LinuxHostname(hostname, 0, 0); err != nil {
+		errs = append(errs, fmt.Errorf("invalid hostname: %w", err))
+	}
+
 	for _, domain := range domains {
 		if err := validate.Domain(domain, 0, 0); err != nil {
 			errs = append(errs, fmt.Errorf("invalid domain name: %w", err))
-		}
-	}
-
-	if hostname != "" {
-		if err := validate.LinuxHostname(hostname, 0, 0); err != nil {
-			errs = append(errs, fmt.Errorf("invalid hostname: %w", err))
 		}
 	}
 

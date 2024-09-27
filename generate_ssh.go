@@ -144,7 +144,7 @@ func validateAlgorithm(algorithm Algorithm, weaks []Algorithm) error {
 }
 
 func generateCommentForSubject(subject Subject) string {
-	users := subject.GetUser()
+	users := subject.GetSSHUser()
 	hosts := []string{}
 	comments := []string{}
 
@@ -220,7 +220,7 @@ func getKeyID(subject Subject, certType CertificateType) string {
 		return fmt.Sprintf("host_%s", host)
 	}
 
-	return fmt.Sprintf("user_%s", subject.GetUser()[0])
+	return fmt.Sprintf("user_%s", subject.GetSSHUser()[0])
 }
 
 // getPrincipals returns the appropriate principals based on the subject and role.
@@ -229,7 +229,7 @@ func getPrincipals(subject Subject, certType CertificateType) []string {
 		return nil
 	}
 
-	users := subject.GetUser()
+	users := subject.GetSSHUser()
 	hosts := []string{}
 	principals := []string{}
 
