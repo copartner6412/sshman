@@ -28,12 +28,12 @@ func FuzzIssueSSH(f *testing.F) {
 			t.Fatalf("error generating pseudo-random input for host: %v", err)
 		}
 
-		userSSHAsset, err := sshman.IssueSSH(userInput.ca, userInput.publicKey, userInput.privateKey, userInput.certificate, userInput.comment, userInput.password)
+		userSSHAsset, err := sshman.IssueSSH(userInput.ca, userInput.keyPair, userInput.certificate, userInput.comment)
 		if err != nil {
 			t.Fatalf("error issuing SSH asset for user: %v", err)
 		}
 
-		hostSSHAsset, err := sshman.IssueSSH(hostInput.ca, hostInput.publicKey, hostInput.privateKey, hostInput.certificate, hostInput.comment, hostInput.password)
+		hostSSHAsset, err := sshman.IssueSSH(hostInput.ca, hostInput.keyPair, hostInput.certificate, hostInput.comment)
 		if err != nil {
 			t.Fatalf("error issuing SSH asset for host: %v", err)
 		}

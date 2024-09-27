@@ -11,7 +11,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func Sign(subject Subject, ca KeyPair, publicKeyBytes []byte, certificateType CertificateType, validFor time.Duration) ([]byte, error) {
+func SignPublicKey(subject Subject, ca KeyPair, publicKeyBytes []byte, certificateType CertificateType, validFor time.Duration) ([]byte, error) {
 	if err := validateSignInput(subject, ca, publicKeyBytes, validFor); err != nil {
 		return nil, fmt.Errorf("invalid input: %w", err)
 	}

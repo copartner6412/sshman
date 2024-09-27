@@ -1,7 +1,6 @@
 package sshman_test
 
 import (
-	"crypto"
 	"errors"
 	"fmt"
 	"math/rand/v2"
@@ -62,11 +61,9 @@ type generateSSHInput struct {
 
 type issueSSHInput struct {
 	ca          sshman.KeyPair
-	publicKey   ssh.PublicKey
-	privateKey  crypto.PrivateKey
+	keyPair sshman.KeyPair
 	certificate *ssh.Certificate
 	comment     string
-	password    string
 }
 
 func pseudorandomInputForGenerateSSH(r *rand.Rand) (generateSSHInput, error) {
@@ -132,11 +129,6 @@ func pseudorandomInputForIssueSSH(r *rand.Rand, certificateType sshman.Certifica
 		return issueSSHInput{}, fmt.Errorf("error generating a random CA: %v", err)
 	}
 
-	privateKey, err := ssh.ParseRawPrivateKeyWithPassphrase(keyPair.PrivateKey, keyPair.PrivateKeyPassword)
-	if err != nil {
-		return issueSSHInput{}, fmt.Errorf("error parsing private key with password to raw crypto.PrivatKey: %v", err)
-	}
-
 	publicKey, _, err := sshman.ParseKeyPair(keyPair)
 	if err != nil {
 		return issueSSHInput{}, fmt.Errorf("error parsing key pair: %v", err)
@@ -174,11 +166,9 @@ func pseudorandomInputForIssueSSH(r *rand.Rand, certificateType sshman.Certifica
 
 	return issueSSHInput{
 		ca:          ca,
-		publicKey:   publicKey,
-		privateKey:  privateKey,
+		keyPair:     keyPair,
 		certificate: &certificate,
 		comment:     comment,
-		password:    password,
 	}, nil
 
 }

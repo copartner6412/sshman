@@ -44,7 +44,7 @@ func FuzzSign(f *testing.F) {
 			t.Fatalf("error generating user key pair: %v", err)
 		}
 
-		userCertificateBytes, err := sshman.Sign(userInput.subject, userInput.ca, userKeyPair.PublicKey, sshman.UserCert, userInput.duration)
+		userCertificateBytes, err := sshman.SignPublicKey(userInput.subject, userInput.ca, userKeyPair.PublicKey, sshman.UserCert, userInput.duration)
 		if err != nil {
 			t.Fatalf("error signing user public key: %v", err)
 		}
@@ -54,7 +54,7 @@ func FuzzSign(f *testing.F) {
 			t.Fatalf("error generating host key pair: %v", err)
 		}
 
-		hostCertificateBytes, err := sshman.Sign(hostInput.subject, hostInput.ca, hostKeyPair.PublicKey, sshman.HostCert, hostInput.duration)
+		hostCertificateBytes, err := sshman.SignPublicKey(hostInput.subject, hostInput.ca, hostKeyPair.PublicKey, sshman.HostCert, hostInput.duration)
 		if err != nil {
 			t.Fatalf("error siging host public key: %v", err)
 		}

@@ -1,7 +1,6 @@
 package sshman
 
 import (
-	"crypto"
 	"crypto/rand"
 	"errors"
 	"fmt"
@@ -10,8 +9,8 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func IssueSSH(ca KeyPair, publicKey ssh.PublicKey, privateKey crypto.PrivateKey, certificate *ssh.Certificate, comment, password string) (SSH, error) {
-	if err := validateIssueInput(ca, publicKey, privateKey, certificate); err != nil {
+func IssueSSH(ca, keyPair KeyPair, certificate *ssh.Certificate, comment string) (SSH, error) {
+	if err := validateIssueInput(ca, keyPair); err != nil {
 		return SSH{}, fmt.Errorf("invalid input: %w", err)
 	}
 
@@ -24,16 +23,11 @@ func IssueSSH(ca KeyPair, publicKey ssh.PublicKey, privateKey crypto.PrivateKey,
 		return SSH{}, fmt.Errorf("error signing certificate: %w", err)
 	}
 
-	privateKeyPEMBytes, err := encodePrivateKeyToPEMBytes(privateKey, comment, password)
-	if err != nil {
-		return SSH{}, fmt.Errorf("error PEM-encoding private key: %w", err)
-	}
-
 	result := SSH{
-		PublicKey:          ssh.MarshalAuthorizedKey(publicKey),
-		PrivateKey:         privateKeyPEMBytes,
+		PublicKey:          keyPair.PublicKey,
+		PrivateKey:         keyPair.PrivateKey,
 		Certificate:        ssh.MarshalAuthorizedKey(certificate),
-		PrivateKeyPassword: []byte(password),
+		PrivateKeyPassword: keyPair.PrivateKeyPassword,
 		NotBefore:          time.Unix(int64(certificate.ValidAfter), 0),
 		NotAfter:           time.Unix(int64(certificate.ValidBefore), 0),
 	}
@@ -45,25 +39,17 @@ func IssueSSH(ca KeyPair, publicKey ssh.PublicKey, privateKey crypto.PrivateKey,
 	return result, nil
 }
 
-func validateIssueInput(ca KeyPair, publicKey ssh.PublicKey, privateKey crypto.PrivateKey, certificate *ssh.Certificate) error {
+func validateIssueInput(ca, keyPair KeyPair) error {
 	var errs []error
 
 	if _, _, err := ParseKeyPair(ca); err != nil {
 		errs = append(errs, fmt.Errorf("invalid CA: %w", err))
 	}
 
-	sshPrivateKey, err := ssh.NewSignerFromKey(privateKey)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("error creating ssh.Signer from crypto.PrivateKey: %w", err))
+	if _, _, err := ParseKeyPair(keyPair); err != nil {
+		errs = append(errs, fmt.Errorf("invalid key pair: %w", err))
 	}
 
-	if !areKeysMatched(publicKey, sshPrivateKey) {
-		errs = append(errs, fmt.Errorf("key pair mismatch"))
-	}
-
-	if !arePublicKeyAndCertificateMatched(certificate, publicKey) {
-		errs = append(errs, fmt.Errorf("certificate/public-key mismatch"))
-	}
 	if len(errs) > 0 {
 		return errors.Join(errs...)
 	}
