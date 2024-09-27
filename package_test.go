@@ -16,7 +16,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func FuzzGenerateSSH(f *testing.F) {
+func FuzzPackage(f *testing.F) {
 	f.Fuzz(func(t *testing.T, seed1, seed2 uint64) {
 		t.Parallel()
 
@@ -72,8 +72,12 @@ func FuzzGenerateSSH(f *testing.F) {
 			t.Fatalf("error loading host SSH asset: %v", err)
 		}
 
+		if err := sshman.AddKeyToSSHAgent(userSSHAsset); err != nil {
+			t.Fatalf("error adding user's SSH private key and certificate to SSH agent")
+		}
+
 		var (
-			privateKeyPath string
+			privateKeyPath  string
 			certificatePath string
 		)
 

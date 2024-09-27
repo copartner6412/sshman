@@ -13,7 +13,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func FuzzSign(f *testing.F) {
+func FuzzSignPublicKey(f *testing.F) {
 	f.Fuzz(func(t *testing.T, seed1, seed2 uint64) {
 		t.Parallel()
 

@@ -12,28 +12,29 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/copartner6412/input/validate"
 )
 
-type ClientConfigBlock struct {
-	Host            string
-	HostName        string
-	User            string
-	Port            uint16
-	IdentityFile    string
-	IdentitiesOnly  bool
-	CertificateFile string
+type clientConfigBlock struct {
+	host            string
+	hostName        string
+	user            string
+	port            uint16
+	identityFile    string
+	identitiesOnly  bool
+	certificateFile string
 }
 
-func loadClientConfigFile(clientConfigPath string) (map[string]ClientConfigBlock, error) {
+func loadClientConfigFile(clientConfigPath string) (map[string]clientConfigBlock, error) {
 	file, err := os.Open(clientConfigPath)
 	if err != nil {
 		return nil, fmt.Errorf("error openning client config file: %w", err)
 	}
 
-	var block ClientConfigBlock
-	blocks := map[string]ClientConfigBlock{}
+	var block clientConfigBlock
+	blocks := map[string]clientConfigBlock{}
 
 	scanner := bufio.NewScanner(file)
 
@@ -41,15 +42,15 @@ func loadClientConfigFile(clientConfigPath string) (map[string]ClientConfigBlock
 		line := strings.TrimSpace(scanner.Text())
 
 		if strings.HasSuffix(line, "Host") {
-			if block.Host != "" {
-				blocks[block.Host] = block
+			if block.host != "" {
+				blocks[block.host] = block
 			}
 			host := strings.TrimSpace(strings.TrimPrefix(line, "Host"))
 			err = validate.LinuxHostname(host, 0, 0)
 			if err != nil {
 				return nil, fmt.Errorf("invalid")
 			}
-			block.Host = host
+			block.host = host
 		}
 
 		if strings.HasPrefix(line, "HostName") {
@@ -57,38 +58,38 @@ func loadClientConfigFile(clientConfigPath string) (map[string]ClientConfigBlock
 			err1 := validate.IP(hostname, "")
 			err2 := validate.Domain(hostname, 0, 0)
 			if err1 != nil && err2 != nil {
-				return nil, fmt.Errorf("invalid hostname for host %s: %w", block.Host, errors.Join(err1, err2))
+				return nil, fmt.Errorf("invalid hostname for host %s: %w", block.host, errors.Join(err1, err2))
 			}
 		}
 
 		if strings.HasPrefix(line, "User") {
-			block.User = strings.TrimSpace(strings.TrimPrefix(line, "User"))
+			block.user = strings.TrimSpace(strings.TrimPrefix(line, "User"))
 		}
 
 		if strings.HasPrefix(line, "Port") {
 			portStr := strings.TrimSpace(strings.TrimPrefix(line, "Port"))
 			portNum, err := strconv.Atoi(portStr)
 			if err != nil {
-				return nil, fmt.Errorf("error converting port to integer for host %s: %w", block.Host, err)
+				return nil, fmt.Errorf("error converting port to integer for host %s: %w", block.host, err)
 			}
-			block.Port = uint16(portNum)
+			block.port = uint16(portNum)
 		}
 
 		if strings.HasPrefix(line, "IdentityFile") {
 			path := strings.TrimSpace(strings.TrimPrefix(line, "IdentityFile"))
 			if !filepath.IsAbs(path) {
-				return nil, fmt.Errorf("IdentityFile's path %s for host %s is not an absolute path", path, block.Host)
+				return nil, fmt.Errorf("IdentityFile's path %s for host %s is not an absolute path", path, block.host)
 			}
-			block.IdentityFile = path
+			block.identityFile = path
 		}
 
 		if strings.HasPrefix(line, "IdentitiesOnly") {
 			yerOrNo := strings.TrimSpace(strings.TrimPrefix(line, "IdentitiesOnly"))
 			switch yerOrNo {
 			case "yes":
-				block.IdentitiesOnly = true
+				block.identitiesOnly = true
 			case "", "not":
-				block.IdentitiesOnly = false
+				block.identitiesOnly = false
 			default:
 				return nil, fmt.Errorf("invalid value for IdentitiesOnly for host %s", yerOrNo)
 			}
@@ -97,18 +98,18 @@ func loadClientConfigFile(clientConfigPath string) (map[string]ClientConfigBlock
 		if strings.HasPrefix(line, "CertificateFile") {
 			path := strings.TrimSpace(strings.TrimPrefix(line, "CertificateFile"))
 			if !filepath.IsAbs(path) {
-				return nil, fmt.Errorf("CertificateFile's path %s for host %s is not an absolute path", path, block.Host)
+				return nil, fmt.Errorf("CertificateFile's path %s for host %s is not an absolute path", path, block.host)
 			}
 		}
 
-		if block.IdentityFile == "" && (block.IdentitiesOnly || block.CertificateFile != "") {
-			return nil, fmt.Errorf("IdentityFile not specified but IdentitiesOnly is yes or CertificateFile is specified for host %s", block.Host)
+		if block.identityFile == "" && (block.identitiesOnly || block.certificateFile != "") {
+			return nil, fmt.Errorf("IdentityFile not specified but IdentitiesOnly is yes or CertificateFile is specified for host %s", block.host)
 		}
 	}
 
 	// Add the last host entry, if any
-	if block.Host != "" {
-		blocks[block.Host] = block
+	if block.host != "" {
+		blocks[block.host] = block
 	}
 
 	if err = scanner.Err(); err != nil {
@@ -118,8 +119,8 @@ func loadClientConfigFile(clientConfigPath string) (map[string]ClientConfigBlock
 	return blocks, nil
 }
 
-func saveClientConfigFile(blocks map[string]ClientConfigBlock, clientConfigPath string) error {
-	var blockSlice []ClientConfigBlock
+func saveClientConfigFile(blocks map[string]clientConfigBlock, clientConfigPath string) error {
+	var blockSlice []clientConfigBlock
 	var nameSlice []string
 	var buf bytes.Buffer
 
@@ -133,17 +134,17 @@ func saveClientConfigFile(blocks map[string]ClientConfigBlock, clientConfigPath 
 	}
 
 	for _, block := range blockSlice {
-		buf.WriteString(fmt.Sprintf("Host %s\n", block.Host))
-		buf.WriteString(fmt.Sprintf("    Hostname %s\n", block.HostName))
-		buf.WriteString(fmt.Sprintf("    User %s\n", block.User))
-		buf.WriteString(fmt.Sprintf("    Port %d\n", block.Port))
-		if block.IdentityFile != "" {
-			buf.WriteString(fmt.Sprintf("    IdentityFile %s\n", block.IdentityFile))
-			if block.IdentitiesOnly {
+		buf.WriteString(fmt.Sprintf("Host %s\n", block.host))
+		buf.WriteString(fmt.Sprintf("    Hostname %s\n", block.hostName))
+		buf.WriteString(fmt.Sprintf("    User %s\n", block.user))
+		buf.WriteString(fmt.Sprintf("    Port %d\n", block.port))
+		if block.identityFile != "" {
+			buf.WriteString(fmt.Sprintf("    IdentityFile %s\n", block.identityFile))
+			if block.identitiesOnly {
 				buf.WriteString("    IdentitiesOnly yes\n")
 			}
-			if block.CertificateFile != "" {
-				buf.WriteString(fmt.Sprintf("    CertificateFile %s\n", block.CertificateFile))
+			if block.certificateFile != "" {
+				buf.WriteString(fmt.Sprintf("    CertificateFile %s\n", block.certificateFile))
 			}
 		}
 		buf.WriteString("\n")
@@ -179,7 +180,7 @@ func DeleteHostFromClientConfig(subject Subject, clientConfigPath string) error 
 	domains := map[string]string{}
 
 	for name, block := range blocks {
-		domains[block.HostName] = name
+		domains[block.hostName] = name
 	}
 
 	users := subject.GetSSHUser()
@@ -234,25 +235,35 @@ func validateDeleteHostFromClienConfigInput(subject Subject, clientConfigPath st
 		errs = append(errs, fmt.Errorf("invalid subject: %w", err))
 	}
 
-	/*currentUser, err := user.Current()
+	currentUser, err := user.Current()
 	if err != nil {
 		return fmt.Errorf("error getting current user: %w", err)
-	}*/
+	}
 
-	if clientConfigPath != "" {
-		if !filepath.IsAbs(clientConfigPath) {
-			errs = append(errs, fmt.Errorf("path to user-specific SSH client configuration file %s is not an absolute path", clientConfigPath))
-		} else {
-			/*if currentUser.Username != "root" && !strings.HasPrefix(clientConfigPath, currentUser.HomeDir) {
-				errs = append(errs, fmt.Errorf("current user %s is not owner of user-specific SSH client configuration file %s", currentUser.Username, clientConfigPath))
-			}*/
+	userUid, err := strconv.Atoi(currentUser.Uid)
+	if err != nil {
+		return fmt.Errorf("error getting current user's UID: %w", err)
+	}
 
-			_, err := os.Stat(clientConfigPath)
-			if os.IsNotExist(err) {
-				errs = append(errs, fmt.Errorf("file %s not existant", clientConfigPath))
-			}
+	if clientConfigPath != "" && !filepath.IsAbs(clientConfigPath) {
+		errs = append(errs, fmt.Errorf("path to user-specific SSH client configuration file %s is not an absolute path", clientConfigPath))
+	} else if clientConfigPath != "" {
+		info, err := os.Stat(clientConfigPath)
+		if os.IsNotExist(err) {
+			errs = append(errs, fmt.Errorf("file %s not existant", clientConfigPath))
 		}
 
+		if len(errs) > 0 {
+			return errors.Join(errs...)
+		}
+
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok {
+			return fmt.Errorf("error getting syscall information of file %s: %w", clientConfigPath, err)
+		}
+		if currentUser.Username != "root" && stat.Uid != uint32(userUid) {
+			errs = append(errs, fmt.Errorf("current user %s is not owner of user-specific SSH client configuration file %s", currentUser.Username, clientConfigPath))
+		}
 	}
 
 	if len(errs) > 0 {
@@ -292,16 +303,16 @@ func AddHostToClientConfig(subject Subject, clientConfigPath, privateKeyPath, ce
 	if len(users) > 1 {
 		for _, user := range users {
 			host := subject.GetHostname() + "-" + user
-			block := ClientConfigBlock{
-				Host:         host,
-				HostName:     getSSHAddress(subject),
-				User:         user,
-				Port:         subject.GetSSHPort(),
-				IdentityFile: privateKeyPath,
+			block := clientConfigBlock{
+				host:         host,
+				hostName:     getSSHAddress(subject),
+				user:         user,
+				port:         subject.GetSSHPort(),
+				identityFile: privateKeyPath,
 			}
 			if privateKeyPath != "" {
-				block.IdentitiesOnly = true
-				block.CertificateFile = certificatePath
+				block.identitiesOnly = true
+				block.certificateFile = certificatePath
 			}
 
 			blocks[host] = block
@@ -309,24 +320,24 @@ func AddHostToClientConfig(subject Subject, clientConfigPath, privateKeyPath, ce
 		}
 	} else {
 		host := subject.GetHostname()
-		block := ClientConfigBlock{
-			Host:         host,
-			HostName:     getSSHAddress(subject),
-			User:         subject.GetSSHUser()[0],
-			Port:         subject.GetSSHPort(),
-			IdentityFile: privateKeyPath,
+		block := clientConfigBlock{
+			host:         host,
+			hostName:     getSSHAddress(subject),
+			user:         subject.GetSSHUser()[0],
+			port:         subject.GetSSHPort(),
+			identityFile: privateKeyPath,
 		}
 
 		if privateKeyPath != "" {
-			block.IdentitiesOnly = true
-			block.CertificateFile = certificatePath
+			block.identitiesOnly = true
+			block.certificateFile = certificatePath
 		}
 
 		blocks[host] = block
 		hosts = append(hosts, host)
 	}
 
-	if err := saveClientConfigFile(blocks, certificatePath); err != nil {
+	if err := saveClientConfigFile(blocks, clientConfigPath); err != nil {
 		return nil, fmt.Errorf("error saving user-specific SSH client configuration file %s: %w", clientConfigPath, err)
 	}
 
@@ -348,63 +359,39 @@ func validateAddHostToClientConfigInput(subject Subject, clientConfigPath, priva
 		return errors.Join(errs...)
 	}
 
-	/*currentUser, err := user.Current()
+	currentUser, err := user.Current()
 	if err != nil {
 		return fmt.Errorf("error getting current user: %w", err)
-	}*/
-
-	if clientConfigPath != "" {
-		if !filepath.IsAbs(clientConfigPath) {
-			errs = append(errs, fmt.Errorf("path to user-specific SSH client configuration file %s is not an absolute path", clientConfigPath))
-		} /*else {
-			if currentUser.Username != "root" && !strings.HasPrefix(clientConfigPath, currentUser.HomeDir) {
-				errs = append(errs, fmt.Errorf("current user %s is not owner of user-specific SSH client configuration file %s", currentUser.Username, clientConfigPath))
-			}
-		}*/
 	}
 
-	if privateKeyPath != "" {
-		if !filepath.IsAbs(privateKeyPath) {
-			errs = append(errs, fmt.Errorf("path to SSH private key file is not an absolute path"))
-		} /*else {
-			if currentUser.Username != "root" && !strings.HasPrefix(privateKeyPath, currentUser.HomeDir) {
-				errs = append(errs, fmt.Errorf("current user %s is not owner of SSH private key file %s", currentUser.Username, privateKeyPath))
-			}
-		}*/
+	userUid, err := strconv.Atoi(currentUser.Uid)
+	if err != nil {
+		return fmt.Errorf("error getting current user's UID: %w", err)
 	}
 
-	if certificatePath != "" {
-		if !filepath.IsAbs(certificatePath) {
-			errs = append(errs, fmt.Errorf("path to SSH user certificate file is not an absolute path"))
-		} /*else {
-			if currentUser.Username != "root" && !strings.HasPrefix(certificatePath, currentUser.HomeDir) {
-				errs = append(errs, fmt.Errorf("current user %s is not owner of SSH user certificate file %s", currentUser.Username, certificatePath))
-			}
-		}*/
+	paths := map[string]string{
+		"user-specific SSH client configuration file": clientConfigPath,
+		"SSH private key file":                        privateKeyPath,
+		"SSH certificate file":                        certificatePath,
 	}
 
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
-
-	if clientConfigPath != "" {
-		_, err := os.Stat(clientConfigPath)
+	for name, path := range paths {
+		if path != "" && !filepath.IsAbs(path) {
+			errs = append(errs, fmt.Errorf("path to %s %s is not an absolute path", name, clientConfigPath))
+		} else if path != "" {
+			info, err := os.Stat(path)
 			if os.IsNotExist(err) {
-				errs = append(errs, fmt.Errorf("file %s not existant", clientConfigPath))
+				errs = append(errs, fmt.Errorf("file %s not existant", path))
+				continue
 			}
-	}
 
-	if privateKeyPath != "" {
-		_, err := os.Stat(privateKeyPath)
-		if os.IsNotExist(err) {
-			errs = append(errs, fmt.Errorf("file %s not existant", privateKeyPath))
-		}
-	}
-
-	if certificatePath != "" {
-		_, err := os.Stat(certificatePath)
-		if os.IsNotExist(err) {
-			errs = append(errs, fmt.Errorf("file %s not existant", certificatePath))
+			stat, ok := info.Sys().(*syscall.Stat_t)
+			if !ok {
+				return fmt.Errorf("error getting syscall information of file %s: %w", path, err)
+			}
+			if currentUser.Username != "root" && stat.Uid != uint32(userUid) {
+				errs = append(errs, fmt.Errorf("current user %s is not owner of %s %s", currentUser.Username, name, path))
+			}
 		}
 	}
 

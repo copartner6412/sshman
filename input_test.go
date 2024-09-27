@@ -61,7 +61,7 @@ type generateSSHInput struct {
 
 type issueSSHInput struct {
 	ca          sshman.KeyPair
-	keyPair sshman.KeyPair
+	keyPair     sshman.KeyPair
 	certificate *ssh.Certificate
 	comment     string
 }
