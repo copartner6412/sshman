@@ -140,13 +140,20 @@ func LoadSSH(directory, privateKeyPassword string) (SSH, error) {
 		fileContents[name] = data
 	}
 
+	certificate, _, _, _, err := ssh.ParseAuthorizedKey(fileContents["certificate"])
+	if err != nil {
+		return SSH{}, fmt.Errorf("error parsing certificate: %w", err)
+	}
+
+	certificateTypeAsserted := certificate.(*ssh.Certificate)
+
 	result := SSH{
 		PublicKey:          fileContents["public key"],
 		PrivateKey:         fileContents["private key"],
 		Certificate:        fileContents["certificate"],
 		PrivateKeyPassword: []byte(privateKeyPassword),
-		NotBefore:          time.Time{},
-		NotAfter:           time.Time{},
+		NotBefore:          time.Unix(int64(certificateTypeAsserted.ValidAfter), 0),
+		NotAfter:           time.Unix(int64(certificateTypeAsserted.ValidBefore), 0),
 	}
 
 	publicKey, _, _, err := ParseSSH(result)
