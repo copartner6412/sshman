@@ -178,6 +178,8 @@ func pseudorandomSubjectComment(r *rand.Rand) (mockSubject, string, error) {
 
 	user := pseudorandom.Username(r, false, true, nil)
 
+	port := pseudorandom.PortPrivate(r)
+
 	domain, err := pseudorandom.Domain(r, 0, 0)
 	if err != nil {
 		errs = append(errs, err)
@@ -211,6 +213,7 @@ func pseudorandomSubjectComment(r *rand.Rand) (mockSubject, string, error) {
 
 	return mockSubject{
 		user:     user,
+		port:     port,
 		domain:   domain,
 		hostname: hostname,
 		ipv4:     ipv4.String(),

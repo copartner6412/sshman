@@ -3,8 +3,11 @@ package sshman_test
 import (
 	"bytes"
 	"fmt"
+	"io/fs"
 	"math/rand/v2"
 	"net"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -36,7 +39,13 @@ func FuzzGenerateSSH(f *testing.F) {
 			t.Fatalf("error generating SSH for user: %v", err)
 		}
 
-		userSSHDir := t.TempDir()
+		sshDir := t.TempDir()
+
+		userSSHDir := filepath.Join(sshDir, userInput.subject.hostname)
+
+		if err := os.Mkdir(userSSHDir, fs.FileMode(0700)); err != nil {
+			t.Fatalf("error making directory for SSH user assets: %v", err)
+		}
 
 		if err := sshman.SaveSSH(generatedUserSSHAsset, userSSHDir); err != nil {
 			t.Fatalf("error saving user SSH asset: %v", err)
@@ -61,6 +70,37 @@ func FuzzGenerateSSH(f *testing.F) {
 		hostSSHAsset, err := sshman.LoadSSH(hostSSHDir, string(generatedHostSSHAsset.PrivateKeyPassword))
 		if err != nil {
 			t.Fatalf("error loading host SSH asset: %v", err)
+		}
+
+		var (
+			privateKeyPath string
+			certificatePath string
+		)
+
+		switch userInput.algorithm {
+		case sshman.AlgorithmUntyped, sshman.AlgorithmED25519:
+			privateKeyPath = filepath.Join(userSSHDir, "id_ed25519")
+			certificatePath = filepath.Join(userSSHDir, "id_ed25519-cert.pub")
+		case sshman.AlgorithmECDSAP256, sshman.AlgorithmECDSAP384, sshman.AlgorithmECDSAP521:
+			privateKeyPath = filepath.Join(userSSHDir, "id_ecdsa")
+			certificatePath = filepath.Join(userSSHDir, "id_ecdsa-cert.pub")
+		case sshman.AlgorithmRSA2048, sshman.AlgorithmRSA4096:
+			privateKeyPath = filepath.Join(userSSHDir, "id_rsa")
+			certificatePath = filepath.Join(userSSHDir, "id_rsa-cert.pub")
+		}
+
+		clientConfigPath := filepath.Join(sshDir, "config")
+
+		if _, err := os.Create(clientConfigPath); err != nil {
+			t.Fatalf("error creating config file: %v", err)
+		}
+
+		if _, err := sshman.AddHostToClientConfig(userInput.subject, clientConfigPath, privateKeyPath, certificatePath); err != nil {
+			t.Fatalf("error adding host to client config file: %v", err)
+		}
+
+		if err := sshman.DeleteHostFromClientConfig(userInput.subject, clientConfigPath); err != nil {
+			t.Fatalf("error deleting host from client config file: %v", err)
 		}
 
 		_, userPrivateKey, userCertificate, err := sshman.ParseSSH(userSSHAsset)

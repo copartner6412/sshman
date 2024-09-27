@@ -234,21 +234,21 @@ func validateDeleteHostFromClienConfigInput(subject Subject, clientConfigPath st
 		errs = append(errs, fmt.Errorf("invalid subject: %w", err))
 	}
 
-	currentUser, err := user.Current()
+	/*currentUser, err := user.Current()
 	if err != nil {
 		return fmt.Errorf("error getting current user: %w", err)
-	}
+	}*/
 
 	if clientConfigPath != "" {
 		if !filepath.IsAbs(clientConfigPath) {
 			errs = append(errs, fmt.Errorf("path to user-specific SSH client configuration file %s is not an absolute path", clientConfigPath))
 		} else {
-			if currentUser.Username != "root" && !strings.HasPrefix(clientConfigPath, currentUser.HomeDir) {
+			/*if currentUser.Username != "root" && !strings.HasPrefix(clientConfigPath, currentUser.HomeDir) {
 				errs = append(errs, fmt.Errorf("current user %s is not owner of user-specific SSH client configuration file %s", currentUser.Username, clientConfigPath))
-			}
+			}*/
 
 			_, err := os.Stat(clientConfigPath)
-			if !os.IsNotExist(err) {
+			if os.IsNotExist(err) {
 				errs = append(errs, fmt.Errorf("file %s not existant", clientConfigPath))
 			}
 		}
@@ -348,55 +348,62 @@ func validateAddHostToClientConfigInput(subject Subject, clientConfigPath, priva
 		return errors.Join(errs...)
 	}
 
-	currentUser, err := user.Current()
+	/*currentUser, err := user.Current()
 	if err != nil {
 		return fmt.Errorf("error getting current user: %w", err)
-	}
+	}*/
 
 	if clientConfigPath != "" {
 		if !filepath.IsAbs(clientConfigPath) {
 			errs = append(errs, fmt.Errorf("path to user-specific SSH client configuration file %s is not an absolute path", clientConfigPath))
-		} else {
+		} /*else {
 			if currentUser.Username != "root" && !strings.HasPrefix(clientConfigPath, currentUser.HomeDir) {
 				errs = append(errs, fmt.Errorf("current user %s is not owner of user-specific SSH client configuration file %s", currentUser.Username, clientConfigPath))
 			}
-		}
+		}*/
 	}
 
 	if privateKeyPath != "" {
 		if !filepath.IsAbs(privateKeyPath) {
 			errs = append(errs, fmt.Errorf("path to SSH private key file is not an absolute path"))
-		} else {
+		} /*else {
 			if currentUser.Username != "root" && !strings.HasPrefix(privateKeyPath, currentUser.HomeDir) {
 				errs = append(errs, fmt.Errorf("current user %s is not owner of SSH private key file %s", currentUser.Username, privateKeyPath))
 			}
-		}
+		}*/
 	}
 
 	if certificatePath != "" {
 		if !filepath.IsAbs(certificatePath) {
 			errs = append(errs, fmt.Errorf("path to SSH user certificate file is not an absolute path"))
-		} else {
+		} /*else {
 			if currentUser.Username != "root" && !strings.HasPrefix(certificatePath, currentUser.HomeDir) {
 				errs = append(errs, fmt.Errorf("current user %s is not owner of SSH user certificate file %s", currentUser.Username, certificatePath))
 			}
-		}
+		}*/
 	}
 
 	if len(errs) > 0 {
 		return errors.Join(errs...)
 	}
 
+	if clientConfigPath != "" {
+		_, err := os.Stat(clientConfigPath)
+			if os.IsNotExist(err) {
+				errs = append(errs, fmt.Errorf("file %s not existant", clientConfigPath))
+			}
+	}
+
 	if privateKeyPath != "" {
 		_, err := os.Stat(privateKeyPath)
-		if !os.IsNotExist(err) {
+		if os.IsNotExist(err) {
 			errs = append(errs, fmt.Errorf("file %s not existant", privateKeyPath))
 		}
 	}
 
 	if certificatePath != "" {
 		_, err := os.Stat(certificatePath)
-		if !os.IsNotExist(err) {
+		if os.IsNotExist(err) {
 			errs = append(errs, fmt.Errorf("file %s not existant", certificatePath))
 		}
 	}
