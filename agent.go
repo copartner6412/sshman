@@ -16,16 +16,16 @@ func AddKeyToSSHAgent[T any](input T) (err error) {
 	var privateKey crypto.PrivateKey
 	var certificate *ssh.Certificate
 	switch inputTypeAsserted := any(input).(type) {
-	case KeyPair:
-		_, _, err = ParseKeyPair(inputTypeAsserted)
+	case *KeyPair:
+		_, _, err = inputTypeAsserted.Parse()
 		if err != nil {
 			return fmt.Errorf("invalid input of type sshman.KeyPair: %w", err)
 		}
 
 		privateKeyBytes = inputTypeAsserted.PrivateKey
 		privateKeyPasswordBytes = inputTypeAsserted.PrivateKeyPassword
-	case SSH:
-		_, _, certificate, err = ParseSSH(inputTypeAsserted)
+	case *SSH:
+		_, _, certificate, err = inputTypeAsserted.Parse()
 		if err != nil {
 			return fmt.Errorf("invalid input of type sshman.SSH: %w", err)
 		}

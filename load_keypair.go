@@ -24,9 +24,9 @@ var filenamesForLoadKeyPair map[struct {
 	{"id_rsa.pub", "id_rsa"}:               {ssh.KeyAlgoRSA: {}},
 }
 
-func LoadKeyPair(directory, privateKeyPassword string) (KeyPair, error) {
+func LoadKeyPair(directory, privateKeyPassword string) (*KeyPair, error) {
 	if directory == "" {
-		return KeyPair{}, fmt.Errorf("empty directory path")
+		return nil, fmt.Errorf("empty directory path")
 	}
 
 	var errs []error
@@ -65,7 +65,7 @@ func LoadKeyPair(directory, privateKeyPassword string) (KeyPair, error) {
 	}
 
 	if len(errs) > 0 {
-		return KeyPair{}, errors.Join(errs...)
+		return nil, errors.Join(errs...)
 	}
 
 	if len(publicKeyFilenames) > 1 {
@@ -77,7 +77,7 @@ func LoadKeyPair(directory, privateKeyPassword string) (KeyPair, error) {
 	}
 
 	if len(errs) > 0 {
-		return KeyPair{}, errors.Join(errs...)
+		return nil, errors.Join(errs...)
 	}
 
 	if len(certificateFilenames) > 0 {
@@ -94,7 +94,7 @@ func LoadKeyPair(directory, privateKeyPassword string) (KeyPair, error) {
 
 	possibleAlgorithms, ok := filenamesForLoadKeyPair[nameSet]
 	if !ok {
-		return KeyPair{}, fmt.Errorf("filenames mismatch, public key: %s, private key: %s", nameSet.publicKey, nameSet.privateKey)
+		return nil, fmt.Errorf("filenames mismatch, public key: %s, private key: %s", nameSet.publicKey, nameSet.privateKey)
 	}
 
 	files := map[string]string{
@@ -127,19 +127,19 @@ func LoadKeyPair(directory, privateKeyPassword string) (KeyPair, error) {
 		fileContents[name] = data
 	}
 
-	result := KeyPair{
+	result := &KeyPair{
 		PublicKey:          fileContents["public key"],
 		PrivateKey:         fileContents["private key"],
 		PrivateKeyPassword: []byte(privateKeyPassword),
 	}
 
-	publicKey, _, err := ParseKeyPair(result)
+	publicKey, _, err := result.Parse()
 	if err != nil {
-		return KeyPair{}, fmt.Errorf("generated invalid SSH asset: %w", err)
+		return nil, fmt.Errorf("generated invalid SSH asset: %w", err)
 	}
 
 	if _, ok = possibleAlgorithms[publicKey.Type()]; !ok {
-		return KeyPair{}, fmt.Errorf("filename/algorithm mismatch, public key: %s, algorithm: %s", nameSet.publicKey, publicKey.Type())
+		return nil, fmt.Errorf("filename/algorithm mismatch, public key: %s, algorithm: %s", nameSet.publicKey, publicKey.Type())
 	}
 
 	return result, nil

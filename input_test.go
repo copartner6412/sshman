@@ -52,16 +52,16 @@ func (s mockSubject) GetIPv6() []string {
 
 type generateSSHInput struct {
 	subject   mockSubject
-	ca        sshman.KeyPair
+	ca        *sshman.KeyPair
 	comment   string
 	duration  time.Duration
 	algorithm sshman.Algorithm
-	password  string
+	password  []byte
 }
 
 type issueSSHInput struct {
-	ca          sshman.KeyPair
-	keyPair     sshman.KeyPair
+	ca          *sshman.KeyPair
+	keyPair     *sshman.KeyPair
 	certificate *ssh.Certificate
 	comment     string
 }
@@ -101,7 +101,7 @@ func pseudorandomInputForGenerateSSH(r *rand.Rand) (generateSSHInput, error) {
 		comment:   comment,
 		duration:  validDuration,
 		algorithm: algorithm,
-		password:  password,
+		password:  []byte(password),
 	}, nil
 }
 
@@ -124,12 +124,14 @@ func pseudorandomInputForIssueSSH(r *rand.Rand, certificateType sshman.Certifica
 		return issueSSHInput{}, fmt.Errorf("error generating pseudo-random password for SSH key: %v", err)
 	}
 
-	keyPair, err := sshman.GenerateKeyPair(algorithm, comment, password)
+	reader := pseudorandom.New(r)
+
+	keyPair, err := sshman.GenerateKeyPair(reader, algorithm, comment, []byte(password))
 	if err != nil {
 		return issueSSHInput{}, fmt.Errorf("error generating a random CA: %v", err)
 	}
 
-	publicKey, _, err := sshman.ParseKeyPair(keyPair)
+	publicKey, _, err := keyPair.Parse()
 	if err != nil {
 		return issueSSHInput{}, fmt.Errorf("error parsing key pair: %v", err)
 	}
@@ -230,22 +232,24 @@ func pseudorandomAlgorithm(r *rand.Rand) sshman.Algorithm {
 	return algorithm
 }
 
-func pseudorandomCA(r *rand.Rand) (sshman.KeyPair, error) {
+func pseudorandomCA(r *rand.Rand) (*sshman.KeyPair, error) {
 	caAlgorithm := pseudorandomAlgorithm(r)
 
 	comment, err := pseudorandom.Password(r, 3, 128, true, true, true, false)
 	if err != nil {
-		return sshman.KeyPair{}, fmt.Errorf("error generating pseudo-random comment: %v", err)
+		return nil, fmt.Errorf("error generating pseudo-random comment: %v", err)
 	}
 
 	password, err := pseudorandom.PasswordFor(r, pseudorandom.PasswordProfileSSHCAKey)
 	if err != nil {
-		return sshman.KeyPair{}, fmt.Errorf("error generating pseudo-random password: %v", err)
+		return nil, fmt.Errorf("error generating pseudo-random password: %v", err)
 	}
 
-	ca, err := sshman.GenerateKeyPair(caAlgorithm, comment, password)
+	reader := pseudorandom.New(r)
+
+	ca, err := sshman.GenerateKeyPair(reader, caAlgorithm, comment, []byte(password))
 	if err != nil {
-		return sshman.KeyPair{}, fmt.Errorf("error generating random key pair: %v", err)
+		return nil, fmt.Errorf("error generating random key pair: %v", err)
 	}
 
 	return ca, nil

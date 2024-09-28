@@ -2,6 +2,8 @@ github.com/copartner6412/input/pseudorandom v0.0.0-20240921105726-f4c80710b5ba h
 github.com/copartner6412/input/pseudorandom v0.0.0-20240921105726-f4c80710b5ba/go.mod h1:TyNLL8bHCxeRcBkadgmeYTpN5OiZZMR/TC+jM4AqQnY=
 github.com/copartner6412/input/random v0.0.0-20240921105726-f4c80710b5ba h1:YnG384R+Qoc2ErVcVFs1s5Yrl/71uAfsDrY+fx9Gh14=
 github.com/copartner6412/input/random v0.0.0-20240921105726-f4c80710b5ba/go.mod h1:QTMXiCD1xot9PWBUpgIfeV+BSgC1IgmbJU7EraA4FsU=
+github.com/copartner6412/input/random v0.0.0-20240928194706-4778fe80061d h1:FSUBgTPExIjINMohGrQ7ozWMZzyxsX97TvOgzE8mo3Y=
+github.com/copartner6412/input/random v0.0.0-20240928194706-4778fe80061d/go.mod h1:QTMXiCD1xot9PWBUpgIfeV+BSgC1IgmbJU7EraA4FsU=
 github.com/copartner6412/input/validate v0.0.0-20240921105726-f4c80710b5ba h1:sJTLZwyp9AMRgmx7QEsPmSsMWLgjorwYdArEU+WPSEw=
 github.com/copartner6412/input/validate v0.0.0-20240921105726-f4c80710b5ba/go.mod h1:8AL4saqTa6TbGchlMe7lf48K/VCu+4j/WyHiUwRyzks=
 golang.org/x/crypto v0.27.0 h1:GXm2NjJrPaiv/h1tb2UH8QfgC/hOf/+z0p6PT8o1w7A=

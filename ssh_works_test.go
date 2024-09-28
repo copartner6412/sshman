@@ -1,9 +1,8 @@
-package sshman
-
-/*
+package sshman_test
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"net"
@@ -12,20 +11,25 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func SSHUserWorks(sshAsset SSH, caPublicKey ssh.PublicKey) error {
-	_, userPrivateKey, userCertificate, err := ParseSSH(sshAsset)
+func SSHUserWorks(sshAsset SSH, caPublicKeyBytes []byte) error {
+	_, userPrivateKey, userCertificate, err := sshAsset.Parse()
 	if err != nil {
 		return fmt.Errorf("error parsing user SSH asset: %w", err)
 	}
 
-	hostKeyPair, err := GenerateKeyPair(AlgorithmED25519, "", "")
+	hostKeyPair, err := GenerateKeyPair(rand.Reader, AlgorithmED25519, "", nil)
 	if err != nil {
 		return fmt.Errorf("error generating a random key pair for test SSH server: %w", err)
 	}
 
-	_, hostPrivateKey, err := ParseKeyPair(hostKeyPair)
+	_, hostPrivateKey, err := hostKeyPair.Parse()
 	if err != nil {
 		return fmt.Errorf("error parsing host key pair: %w", err)
+	}
+
+	caPublicKey, _, _, _, err := ssh.ParseAuthorizedKey(caPublicKeyBytes)
+	if err != nil {
+		return fmt.Errorf("error parsing CA public key: %w", err)
 	}
 
 	userCertChecker := ssh.CertChecker{
@@ -40,20 +44,28 @@ func SSHUserWorks(sshAsset SSH, caPublicKey ssh.PublicKey) error {
 			if err != nil {
 				return nil, fmt.Errorf("error authenticating user certificate: %v", err)
 			}
+
 			err = userCertChecker.CheckCert(userCertificate.ValidPrincipals[0], key.(*ssh.Certificate))
 			if err != nil {
 				return nil, fmt.Errorf("invalid certificate: %w", err)
 			}
+
 			return permissions, nil
 		},
 	}
 
 	serverConfig.AddHostKey(hostPrivateKey)
 
+	userCertPrivateKey, err := ssh.NewCertSigner(userCertificate, userPrivateKey)
+	if err != nil {
+		return fmt.Errorf("error creating a ssh.CertSigner for user: %v", err)
+	}
+
 	clientConfig := &ssh.ClientConfig{
-		User:    userCertificate.ValidPrincipals[0],
-		Auth:    []ssh.AuthMethod{ssh.PublicKeys(userPrivateKey)},
-		Timeout: 1 * time.Second,
+		User:            userCertificate.ValidPrincipals[0],
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(userCertPrivateKey)},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         1 * time.Second,
 	}
 
 	listener, err := net.Listen("tcp", "localhost:0")
@@ -100,7 +112,7 @@ func SSHUserWorks(sshAsset SSH, caPublicKey ssh.PublicKey) error {
 }
 
 func SSHHostWorks(sshAsset SSH, caPublicKey ssh.PublicKey) error {
-	_, hostPrivateKey, hostCertificate, err := ParseSSH(sshAsset)
+	_, hostPrivateKey, hostCertificate, err := sshAsset.Parse()
 	if err != nil {
 		return fmt.Errorf("error parsing host SSH asset: %w", err)
 	}
@@ -178,4 +190,3 @@ func SSHHostWorks(sshAsset SSH, caPublicKey ssh.PublicKey) error {
 
 	return nil
 }
-*/

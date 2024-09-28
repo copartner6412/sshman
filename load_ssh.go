@@ -30,9 +30,9 @@ var filenamesForPublicKey []string = []string{"id_ed25519.pub", "id_ed25519_sk.p
 var filenamesForPrivateKey []string = []string{"id_ed25519", "id_ed25519_sk", "id_ecdsa", "id_ecdsa_sk", "id_rsa"}
 var filenamesForCertificate []string = []string{"id_ed25519-cert.pub", "id_ed25519_sk-cert.pub", "id_ecdsa-cert.pub", "id_ecdsa_sk-cert.pub", "id_rsa-cert.pub"}
 
-func LoadSSH(directory, privateKeyPassword string) (SSH, error) {
+func LoadSSH(directory, privateKeyPassword string) (*SSH, error) {
 	if directory == "" {
-		return SSH{}, fmt.Errorf("empty directory path")
+		return nil, fmt.Errorf("empty directory path")
 	}
 
 	var errs []error
@@ -75,7 +75,7 @@ func LoadSSH(directory, privateKeyPassword string) (SSH, error) {
 	}
 
 	if len(errs) > 0 {
-		return SSH{}, errors.Join(errs...)
+		return nil, errors.Join(errs...)
 	}
 
 	if len(publicKeyFilenames) > 1 {
@@ -91,7 +91,7 @@ func LoadSSH(directory, privateKeyPassword string) (SSH, error) {
 	}
 
 	if len(errs) > 0 {
-		return SSH{}, errors.Join(errs...)
+		return nil, errors.Join(errs...)
 	}
 
 	nameSet := struct {
@@ -106,7 +106,7 @@ func LoadSSH(directory, privateKeyPassword string) (SSH, error) {
 
 	possibleAlgorithms, ok := filenamesForLoadSSH[nameSet]
 	if !ok {
-		return SSH{}, fmt.Errorf("filenames mismatch, public key: %s, private key: %s, certificate: %s", nameSet.publicKey, nameSet.privateKey, nameSet.certificate)
+		return nil, fmt.Errorf("filenames mismatch, public key: %s, private key: %s, certificate: %s", nameSet.publicKey, nameSet.privateKey, nameSet.certificate)
 	}
 
 	files := map[string]string{
@@ -142,12 +142,12 @@ func LoadSSH(directory, privateKeyPassword string) (SSH, error) {
 
 	certificate, _, _, _, err := ssh.ParseAuthorizedKey(fileContents["certificate"])
 	if err != nil {
-		return SSH{}, fmt.Errorf("error parsing certificate: %w", err)
+		return nil, fmt.Errorf("error parsing certificate: %w", err)
 	}
 
 	certificateTypeAsserted := certificate.(*ssh.Certificate)
 
-	result := SSH{
+	result := &SSH{
 		PublicKey:          fileContents["public key"],
 		PrivateKey:         fileContents["private key"],
 		Certificate:        fileContents["certificate"],
@@ -156,13 +156,13 @@ func LoadSSH(directory, privateKeyPassword string) (SSH, error) {
 		NotAfter:           time.Unix(int64(certificateTypeAsserted.ValidBefore), 0),
 	}
 
-	publicKey, _, _, err := ParseSSH(result)
+	publicKey, _, _, err := result.Parse()
 	if err != nil {
-		return SSH{}, fmt.Errorf("generated invalid SSH asset: %w", err)
+		return nil, fmt.Errorf("generated invalid SSH asset: %w", err)
 	}
 
 	if _, ok = possibleAlgorithms[publicKey.Type()]; !ok {
-		return SSH{}, fmt.Errorf("filename/algorithm mismatch, public key: %s, algorithm: %s", nameSet.publicKey, publicKey.Type())
+		return nil, fmt.Errorf("filename/algorithm mismatch, public key: %s, algorithm: %s", nameSet.publicKey, publicKey.Type())
 	}
 
 	return result, nil

@@ -145,10 +145,12 @@ func FuzzPackage(f *testing.F) {
 				if err != nil {
 					return nil, fmt.Errorf("failed to authenticate user certificate: %v", err)
 				}
+
 				err = userCertChecker.CheckCert(userCertificate.ValidPrincipals[0], key.(*ssh.Certificate))
 				if err != nil {
 					return nil, fmt.Errorf("invalid user certificate: %v", err)
 				}
+
 				return permissions, nil
 			},
 		}

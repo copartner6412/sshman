@@ -27,21 +27,21 @@ const (
 
 // GenerateSSH creates an SSH key pair and certificate based on the provided parameters.
 // It returns an SSH struct containing the generated keys and certificate, or an error if the process fails.
-func GenerateSSH(subject Subject, ca KeyPair, certificateType CertificateType, algorithm Algorithm, validFor time.Duration, password string) (SSH, error) {
+func GenerateSSH(subject Subject, ca KeyPair, certificateType CertificateType, algorithm Algorithm, validFor time.Duration, password []byte) (*SSH, error) {
 	err := validateGenerateSSHInput(subject, ca, algorithm, validFor, password)
 	if err != nil {
-		return SSH{}, fmt.Errorf("invalid input: %w", err)
+		return nil, fmt.Errorf("invalid input: %w", err)
 	}
 
-	_, caPrivateKey, err := ParseKeyPair(ca)
+	_, caPrivateKey, err := ca.Parse()
 	if err != nil {
-		return SSH{}, fmt.Errorf("error parsing CA: %w", err)
+		return nil, fmt.Errorf("error parsing CA: %w", err)
 	}
 
 	// Generate key pair
 	publicKey, privateKey, err := random.KeyPair(random.Algorithm(algorithm))
 	if err != nil {
-		return SSH{}, fmt.Errorf("error generating key pair: %w", err)
+		return nil, fmt.Errorf("error generating key pair: %w", err)
 	}
 
 	comment := generateCommentForSubject(subject)
@@ -49,7 +49,7 @@ func GenerateSSH(subject Subject, ca KeyPair, certificateType CertificateType, a
 	// Create SSH public key
 	sshPublicKey, err := ssh.NewPublicKey(publicKey)
 	if err != nil {
-		return SSH{}, fmt.Errorf("error creating SSH public key: %w", err)
+		return nil, fmt.Errorf("error creating SSH public key: %w", err)
 	}
 
 	// Prepare certificate
@@ -57,7 +57,7 @@ func GenerateSSH(subject Subject, ca KeyPair, certificateType CertificateType, a
 	notAfter := notBefore.Add(validFor)
 	serial, err := random.BigInteger(minSSHCertificateSerialBitSize, maxSSHCertificateSerialBitSize)
 	if err != nil {
-		return SSH{}, fmt.Errorf("error generating a serial number for SSH certificate: %w", err)
+		return nil, fmt.Errorf("error generating a serial number for SSH certificate: %w", err)
 	}
 
 	certificate := &ssh.Certificate{
@@ -74,39 +74,39 @@ func GenerateSSH(subject Subject, ca KeyPair, certificateType CertificateType, a
 	}
 
 	if err := certificate.SignCert(rand.Reader, caPrivateKey); err != nil {
-		return SSH{}, fmt.Errorf("error signing certificate: %w", err)
+		return nil, fmt.Errorf("error signing certificate: %w", err)
 	}
 
 	// Encode private key
 	privateKeyPEMBytes, err := encodePrivateKeyToPEMBytes(privateKey, comment, password)
 	if err != nil {
-		return SSH{}, fmt.Errorf("error encoding private key: %w", err)
+		return nil, fmt.Errorf("error encoding private key: %w", err)
 	}
 
-	result := SSH{
+	result := &SSH{
 		PublicKey:          ssh.MarshalAuthorizedKey(sshPublicKey),
 		PrivateKey:         privateKeyPEMBytes,
 		Certificate:        ssh.MarshalAuthorizedKey(certificate),
-		PrivateKeyPassword: []byte(password),
+		PrivateKeyPassword: password,
 		NotBefore:          notBefore,
 		NotAfter:           notAfter,
 	}
 
-	if _, _, _, err := ParseSSH(result); err != nil {
-		return SSH{}, fmt.Errorf("generated invalid SSH asset: %w", err)
+	if _, _, _, err := result.Parse(); err != nil {
+		return nil, fmt.Errorf("generated invalid SSH asset: %w", err)
 	}
 
 	return result, nil
 }
 
-func validateGenerateSSHInput(subject Subject, ca KeyPair, algorithm Algorithm, validFor time.Duration, password string) error {
+func validateGenerateSSHInput(subject Subject, ca KeyPair, algorithm Algorithm, validFor time.Duration, password []byte) error {
 	var errs []error
 
 	if err := ValidateSubject(subject); err != nil {
 		errs = append(errs, fmt.Errorf("invalid subject: %w", err))
 	}
 
-	if _, _, err := ParseKeyPair(ca); err != nil {
+	if _, _, err := ca.Parse(); err != nil {
 		errs = append(errs, fmt.Errorf("error parsing CA: %w", err))
 	}
 
@@ -118,7 +118,7 @@ func validateGenerateSSHInput(subject Subject, ca KeyPair, algorithm Algorithm, 
 		errs = append(errs, fmt.Errorf("invalid duration: %w", err))
 	}
 
-	if err := validate.PasswordFor(password, validate.PasswordProfileSSHKey); err != nil {
+	if err := validate.PasswordFor(string(password), validate.PasswordProfileSSHKey); err != nil {
 		errs = append(errs, fmt.Errorf("invalid password: %w", err))
 	}
 
@@ -168,18 +168,18 @@ func generateCommentForSubject(subject Subject) string {
 }
 
 // encodePrivateKey encodes the private key in PEM format, optionally encrypting it with a password.
-func encodePrivateKeyToPEMBytes(privateKey crypto.PrivateKey, comment, password string) ([]byte, error) {
+func encodePrivateKeyToPEMBytes(privateKey crypto.PrivateKey, comment string, password []byte) ([]byte, error) {
 	var pemBlock *pem.Block
 	var err error
 
 	switch password {
-	case "":
+	case nil:
 		pemBlock, err = ssh.MarshalPrivateKey(privateKey, comment)
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling private key: %w", err)
 		}
 	default:
-		pemBlock, err = ssh.MarshalPrivateKeyWithPassphrase(privateKey, comment, []byte(password))
+		pemBlock, err = ssh.MarshalPrivateKeyWithPassphrase(privateKey, comment, password)
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling private key with password: %w", err)
 		}
