@@ -57,5 +57,5 @@ func (cr CertificateRequest) SignRequest(rand io.Reader, authority *KeyPair) (ce
 		return nil, fmt.Errorf("error signing certificate: %w", err)
 	}
 
-	return certificate.Marshal(), nil
+	return ssh.MarshalAuthorizedKey(certificate), nil
 }

@@ -9,7 +9,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func LoadParsePublicKey(path string) (ssh.PublicKey, error) {
+func LoadPublicKey(path string) ([]byte, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("error opening public key file in %s: %w", path, err)
@@ -25,10 +25,9 @@ func LoadParsePublicKey(path string) (ssh.PublicKey, error) {
 	data = bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
 	data = bytes.TrimSpace(data)
 
-	publicKey, _, _, _, err := ssh.ParseAuthorizedKey(data)
-	if err != nil {
+	if _, _, _, _, err := ssh.ParseAuthorizedKey(data); err != nil {
 		return nil, fmt.Errorf("error parsing public key: %w", err)
 	}
 
-	return publicKey, nil
+	return data, nil
 }

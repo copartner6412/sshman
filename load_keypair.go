@@ -24,7 +24,7 @@ var filenamesForLoadKeyPair map[struct {
 	{"id_rsa.pub", "id_rsa"}:               {ssh.KeyAlgoRSA: {}},
 }
 
-func LoadKeyPair(directory, privateKeyPassword string) (*KeyPair, error) {
+func LoadKeyPair(directory string, privateKeyPassword []byte) (*KeyPair, error) {
 	if directory == "" {
 		return nil, fmt.Errorf("empty directory path")
 	}

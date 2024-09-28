@@ -30,7 +30,7 @@ var filenamesForPublicKey []string = []string{"id_ed25519.pub", "id_ed25519_sk.p
 var filenamesForPrivateKey []string = []string{"id_ed25519", "id_ed25519_sk", "id_ecdsa", "id_ecdsa_sk", "id_rsa"}
 var filenamesForCertificate []string = []string{"id_ed25519-cert.pub", "id_ed25519_sk-cert.pub", "id_ecdsa-cert.pub", "id_ecdsa_sk-cert.pub", "id_rsa-cert.pub"}
 
-func LoadSSH(directory, privateKeyPassword string) (*SSH, error) {
+func LoadSSH(directory string, privateKeyPassword []byte) (*SSH, error) {
 	if directory == "" {
 		return nil, fmt.Errorf("empty directory path")
 	}

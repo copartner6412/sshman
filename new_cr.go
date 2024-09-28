@@ -11,6 +11,12 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+const (
+	serialNumberBitSize uint          = 64
+	minDurationAllowed  time.Duration = 1 * time.Second
+	maxDurationAllowed  time.Duration = 20 * 365 * 24 * time.Hour
+)
+
 func NewCertificateRequest(subject Subject, publicKeyBytes []byte, certificateType CertificateType, validFor time.Duration, criticalOptions, extensions map[string]string) ([]byte, error) {
 	if err := validateNewRequestInput(subject, publicKeyBytes, validFor); err != nil {
 		return nil, fmt.Errorf("invalid input: %w", err)
@@ -23,7 +29,7 @@ func NewCertificateRequest(subject Subject, publicKeyBytes []byte, certificateTy
 
 	notBefore := time.Now()
 	notAfter := notBefore.Add(validFor)
-	serial, err := random.BigInteger(rand.Reader, minSSHCertificateSerialBitSize, maxSSHCertificateSerialBitSize)
+	serial, err := random.BigInteger(rand.Reader, serialNumberBitSize, serialNumberBitSize)
 	if err != nil {
 		return nil, fmt.Errorf("error generating a serial number for SSH certificate: %w", err)
 	}

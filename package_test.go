@@ -1,85 +1,165 @@
 package sshman_test
 
 import (
-	"bytes"
-	"fmt"
-	"io/fs"
 	"math/rand/v2"
-	"net"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
-	"time"
 
+	"github.com/copartner6412/input/pseudorandom"
 	"github.com/copartner6412/sshman"
-	"golang.org/x/crypto/ssh"
 )
 
 func FuzzPackage(f *testing.F) {
 	f.Fuzz(func(t *testing.T, seed1, seed2 uint64) {
 		t.Parallel()
-
 		r := rand.New(rand.NewPCG(seed1, seed2))
 
-		// Step 1: Generate pseudo-random inputs for user and host SSH assets
-		userInput, err := pseudorandomInputForGenerateSSH(r)
+		subject, comment, err := pseudorandomSubjectComment(r)
+		if err != nil {
+			t.Fatalf("error generating pseudo-random subject and corresponding comment: %v", err)
+		}
+
+		userInput, err := pseudorandomTestInput(r)
 		if err != nil {
 			t.Fatalf("error generating pseudo-random input for user: %v", err)
 		}
 
-		hostInput, err := pseudorandomInputForGenerateSSH(r)
+		hostInput, err := pseudorandomTestInput(r)
 		if err != nil {
 			t.Fatalf("error generating pseudo-random input for host: %v", err)
 		}
 
-		// Step 2: Generate user and host SSH assets using GenerateSSH
-		generatedUserSSHAsset, err := sshman.GenerateSSH(userInput.subject, userInput.ca, sshman.UserCert, userInput.algorithm, userInput.duration, userInput.password)
+		reader := pseudorandom.New(r)
+
+		generatedUserKeyPair, err := sshman.GenerateKeyPair(reader, userInput.algorithm, comment, userInput.password)
 		if err != nil {
-			t.Fatalf("error generating SSH for user: %v", err)
+			t.Fatalf("error generating a pseudo-random key pair for user: %v", err)
+		}
+
+		generatedHostKeyPair, err := sshman.GenerateKeyPair(reader, hostInput.algorithm, comment, hostInput.password)
+		if err != nil {
+			t.Fatalf("error generating a pseudo-random key pair for host: %v", err)
+		}
+
+		userKeyPairDir := t.TempDir()
+		hostKeyPairDir := t.TempDir()
+
+		if err := generatedUserKeyPair.Save(userKeyPairDir); err != nil {
+			t.Fatalf("error saving user key pair: %v", err)
+		}
+
+		if err := generatedHostKeyPair.Save(hostKeyPairDir); err != nil {
+			t.Fatalf("error saving host key pair: %v", err)
+		}
+
+		userKeyPair, err := sshman.LoadKeyPair(userKeyPairDir, generatedUserKeyPair.PrivateKeyPassword)
+		if err != nil {
+			t.Fatalf("error loading user key pair: %v", err)
+		}
+
+		hostKeyPair, err := sshman.LoadKeyPair(hostKeyPairDir, generatedHostKeyPair.PrivateKeyPassword)
+		if err != nil {
+			t.Fatalf("error loading host key pair: %v", err)
+		}
+
+		if err := sshman.AddKeyToSSHAgent(userKeyPair); err != nil {
+			t.Fatalf("error adding private key to SSH agent: %v", err)
 		}
 
 		sshDir := t.TempDir()
+		clientConfigPath := filepath.Join(sshDir, "config")
 
-		userSSHDir := filepath.Join(sshDir, userInput.subject.hostname)
-
-		if err := os.Mkdir(userSSHDir, fs.FileMode(0700)); err != nil {
-			t.Fatalf("error making directory for SSH user assets: %v", err)
-		}
-
-		if err := sshman.SaveSSH(generatedUserSSHAsset, userSSHDir); err != nil {
-			t.Fatalf("error saving user SSH asset: %v", err)
-		}
-
-		generatedHostSSHAsset, err := sshman.GenerateSSH(userInput.subject, hostInput.ca, sshman.HostCert, hostInput.algorithm, hostInput.duration, hostInput.password)
-		if err != nil {
-			t.Fatalf("error generating SSH for host: %v", err)
-		}
-
-		hostSSHDir := t.TempDir()
-
-		if err := sshman.SaveSSH(generatedHostSSHAsset, hostSSHDir); err != nil {
-			t.Fatalf("error saving host SSH asset: %v", err)
-		}
-
-		userSSHAsset, err := sshman.LoadSSH(userSSHDir, string(generatedUserSSHAsset.PrivateKeyPassword))
-		if err != nil {
-			t.Fatalf("error loading user SSH asset: %v", err)
-		}
-
-		hostSSHAsset, err := sshman.LoadSSH(hostSSHDir, string(generatedHostSSHAsset.PrivateKeyPassword))
-		if err != nil {
-			t.Fatalf("error loading host SSH asset: %v", err)
-		}
-
-		if err := sshman.AddKeyToSSHAgent(userSSHAsset); err != nil {
-			t.Fatalf("error adding user's SSH private key and certificate to SSH agent")
+		if _, err := os.Create(clientConfigPath); err != nil {
+			t.Fatalf("error creating ssh client configuration file: %v", err)
 		}
 
 		var (
 			privateKeyPath  string
 			certificatePath string
 		)
+
+		switch userInput.algorithm {
+		case sshman.AlgorithmUntyped, sshman.AlgorithmED25519:
+			privateKeyPath = filepath.Join(userKeyPairDir, "id_ed25519")
+		case sshman.AlgorithmECDSAP256, sshman.AlgorithmECDSAP384, sshman.AlgorithmECDSAP521:
+			privateKeyPath = filepath.Join(userKeyPairDir, "id_ecdsa")
+		case sshman.AlgorithmRSA2048, sshman.AlgorithmRSA4096:
+			privateKeyPath = filepath.Join(userKeyPairDir, "id_rsa")
+		}
+
+		if _, err := sshman.AddHostToClientConfig(subject, clientConfigPath, privateKeyPath, ""); err != nil {
+			t.Fatalf("error adding host to client config: %v", err)
+		}
+
+		if err := sshman.DeleteHostFromClientConfig(subject, clientConfigPath); err != nil {
+			t.Fatalf("error deleting host from client config: %v", err)
+		}
+
+		userCertificateRequestBytes, err := sshman.NewCertificateRequest(subject, userKeyPair.PublicKey, sshman.UserCert, userInput.duration, nil, nil)
+		if err != nil {
+			t.Fatalf("error generating a request for user public key: %v", err)
+		}
+
+		hostCertificateRequestBytes, err := sshman.NewCertificateRequest(subject, hostKeyPair.PublicKey, sshman.HostCert, hostInput.duration, nil, nil)
+		if err != nil {
+			t.Fatalf("error generating a request for host public key: %v", err)
+		}
+
+		userCertificateRequest, err := sshman.ParseCertificateRequest(userCertificateRequestBytes)
+		if err != nil {
+			t.Fatalf("error parsing user certificate request: %v", err)
+		}
+
+		hostCertificateRequest, err := sshman.ParseCertificateRequest(hostCertificateRequestBytes)
+		if err != nil {
+			t.Fatalf("error parsing host certificate request: %v", err)
+		}
+
+		userCertificateBytes, err := userCertificateRequest.SignRequest(reader, userInput.ca)
+		if err != nil {
+			t.Fatalf("error signing user certificate request: %v", err)
+		}
+
+		hostCertificateBytes, err := hostCertificateRequest.SignRequest(reader, hostInput.ca)
+		if err != nil {
+			t.Fatalf("error signing host certificate request: %v", err)
+		}
+
+		generatedUserSSH, err := userKeyPair.NewSSH(userCertificateBytes)
+		if err != nil {
+			t.Fatalf("error creating new SSH user asset from user key pair and its certificate: %v", err)
+		}
+
+		generatedHostSSH, err := hostKeyPair.NewSSH(hostCertificateBytes)
+		if err != nil {
+			t.Fatalf("error creating new SSH host asset from host key pair and its certificate: %v", err)
+		}
+
+		userSSHDir := t.TempDir()
+		hostSSHDir := t.TempDir()
+
+		if err := generatedUserSSH.Save(userSSHDir); err != nil {
+			t.Fatalf("error saving user SSH assets: %v", err)
+		}
+
+		if err := generatedHostSSH.Save(hostSSHDir); err != nil {
+			t.Fatalf("error saving host SSH assets: %v", err)
+		}
+
+		userSSH, err := sshman.LoadSSH(userSSHDir, userInput.password)
+		if err != nil {
+			t.Fatalf("error saving user SSH assets: %v", err)
+		}
+
+		hostSSH, err := sshman.LoadSSH(hostSSHDir, hostInput.password)
+		if err != nil {
+			t.Fatalf("error saving host SSH assets: %v", err)
+		}
+
+		if err := sshman.AddKeyToSSHAgent(userSSH); err != nil {
+			t.Fatalf("error adding SSH asset to SSH agent: %v", err)
+		}
 
 		switch userInput.algorithm {
 		case sshman.AlgorithmUntyped, sshman.AlgorithmED25519:
@@ -93,130 +173,12 @@ func FuzzPackage(f *testing.F) {
 			certificatePath = filepath.Join(userSSHDir, "id_rsa-cert.pub")
 		}
 
-		clientConfigPath := filepath.Join(sshDir, "config")
-
-		if _, err := os.Create(clientConfigPath); err != nil {
-			t.Fatalf("error creating config file: %v", err)
+		if _, err := sshman.AddHostToClientConfig(subject, clientConfigPath, privateKeyPath, certificatePath); err != nil {
+			t.Fatalf("error adding host private key and certificate to client config: %v", err)
 		}
 
-		if _, err := sshman.AddHostToClientConfig(userInput.subject, clientConfigPath, privateKeyPath, certificatePath); err != nil {
-			t.Fatalf("error adding host to client config file: %v", err)
+		if err := sshman.TestSSH(userSSH, hostSSH, userInput.ca.PublicKey, hostInput.ca.PublicKey); err != nil {
+			t.Fatalf("error testing SSH user and host: %v", err)
 		}
-
-		if err := sshman.DeleteHostFromClientConfig(userInput.subject, clientConfigPath); err != nil {
-			t.Fatalf("error deleting host from client config file: %v", err)
-		}
-
-		_, userPrivateKey, userCertificate, err := sshman.ParseSSH(userSSHAsset)
-		if err != nil {
-			t.Fatalf("error parsing user SSH asset: %v", err)
-		}
-
-		_, hostPrivateKey, hostCertificate, err := sshman.ParseSSH(hostSSHAsset)
-		if err != nil {
-			t.Fatalf("error parsing host SSH asset: %v", err)
-		}
-
-		userCAPublicKey, _, err := sshman.ParseKeyPair(userInput.ca)
-		if err != nil {
-			t.Fatalf("error parsing user CA key pair: %v", err)
-		}
-
-		hostCAPublicKey, _, err := sshman.ParseKeyPair(hostInput.ca)
-		if err != nil {
-			t.Fatalf("error parsing host CA key pair: %v", err)
-		}
-
-		userCertChecker := ssh.CertChecker{
-			IsUserAuthority: func(auth ssh.PublicKey) bool {
-				return bytes.Equal(auth.Marshal(), userCAPublicKey.Marshal())
-			},
-		}
-
-		hostCertPrivateKey, err := ssh.NewCertSigner(hostCertificate, hostPrivateKey)
-		if err != nil {
-			t.Fatalf("error creating a ssh.CertSigner for host: %v", err)
-		}
-
-		// Create an ssh.ServerConfig and set the PublicKeyCallback
-		serverConfig := &ssh.ServerConfig{
-			PublicKeyCallback: func(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
-				permissions, err := userCertChecker.Authenticate(conn, key)
-				if err != nil {
-					return nil, fmt.Errorf("failed to authenticate user certificate: %v", err)
-				}
-
-				err = userCertChecker.CheckCert(userCertificate.ValidPrincipals[0], key.(*ssh.Certificate))
-				if err != nil {
-					return nil, fmt.Errorf("invalid user certificate: %v", err)
-				}
-
-				return permissions, nil
-			},
-		}
-
-		serverConfig.AddHostKey(hostCertPrivateKey)
-
-		hostCertChecker := ssh.CertChecker{
-			IsHostAuthority: func(auth ssh.PublicKey, address string) bool {
-				return bytes.Equal(auth.Marshal(), hostCAPublicKey.Marshal())
-			},
-		}
-
-		userCertPrivateKey, err := ssh.NewCertSigner(userCertificate, userPrivateKey)
-		if err != nil {
-			t.Fatalf("error creating a ssh.CertSigner for user: %v", err)
-		}
-
-		clientConfig := &ssh.ClientConfig{
-			User: userInput.subject.user,
-			Auth: []ssh.AuthMethod{ssh.PublicKeys(userCertPrivateKey)},
-			HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-				err := hostCertChecker.CheckHostKey(hostname, remote, key)
-				if err != nil {
-					return fmt.Errorf("failed to authenticate host certificate: %v", err)
-				}
-				return nil
-			},
-			Timeout: 1 * time.Second,
-		}
-
-		listener, err := net.Listen("tcp", "localhost:0")
-		if err != nil {
-			t.Fatalf("failed to listen on a random port: %v", err)
-		}
-		defer listener.Close()
-
-		var wg sync.WaitGroup
-
-		wg.Add(1)
-
-		go func() {
-			wg.Done()
-			conn, err := listener.Accept()
-			if err != nil {
-				return
-			}
-			defer conn.Close()
-
-			sshConn, chans, reqs, err := ssh.NewServerConn(conn, serverConfig)
-			if err != nil {
-				return
-			}
-			defer sshConn.Close()
-			go ssh.DiscardRequests(reqs)
-			for newChannel := range chans {
-				_, _, _ = newChannel.Accept()
-			}
-		}()
-		wg.Wait()
-
-		// Step 5: Create a client and check if it can connect to the server
-		conn, err := ssh.Dial("tcp", listener.Addr().String(), clientConfig)
-		if err != nil {
-			t.Errorf("failed to dial the server: %v", err)
-			return
-		}
-		defer conn.Close()
 	})
 }

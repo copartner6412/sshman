@@ -9,12 +9,11 @@ import (
 
 	"github.com/copartner6412/input/pseudorandom"
 	"github.com/copartner6412/sshman"
-	"golang.org/x/crypto/ssh"
 )
 
 const (
 	minDuration time.Duration = 1 * time.Second
-	maxDuration time.Duration = 30 * 365 * 24 * time.Hour // 30 years
+	maxDuration time.Duration = 20 * 365 * 24 * time.Hour // 20 years
 )
 
 type mockSubject struct {
@@ -50,33 +49,26 @@ func (s mockSubject) GetIPv6() []string {
 	return []string{s.ipv6}
 }
 
-type generateSSHInput struct {
-	subject   mockSubject
+type testInput struct {
 	ca        *sshman.KeyPair
-	comment   string
 	duration  time.Duration
 	algorithm sshman.Algorithm
 	password  []byte
 }
 
-type issueSSHInput struct {
-	ca          *sshman.KeyPair
-	keyPair     *sshman.KeyPair
-	certificate *ssh.Certificate
-	comment     string
-}
-
-func pseudorandomInputForGenerateSSH(r *rand.Rand) (generateSSHInput, error) {
+func pseudorandomTestInput(r *rand.Rand) (testInput, error) {
 	var errs []error
-
-	subject, comment, err := pseudorandomSubjectComment(r)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("error generating pseudo-random Subject and comment: %v", err))
-	}
 
 	ca, err := pseudorandomCA(r)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("error generating pseudo-random CA: %v", err))
+	}
+
+	algorithm := pseudorandomAlgorithm(r)
+
+	validDuration, err := pseudorandom.Duration(r, minDuration, maxDuration)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("error generating pseudo-random duration: %v", err))
 	}
 
 	password, err := pseudorandom.PasswordFor(r, pseudorandom.PasswordProfileSSHKey)
@@ -84,95 +76,16 @@ func pseudorandomInputForGenerateSSH(r *rand.Rand) (generateSSHInput, error) {
 		errs = append(errs, fmt.Errorf("error generating pseudo-random password: %v", err))
 	}
 
-	validDuration, err := pseudorandom.Duration(r, minDuration, maxDuration)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("error generating pseudo-random duration: %v", err))
-	}
-
-	algorithm := pseudorandomAlgorithm(r)
-
 	if len(errs) > 0 {
-		return generateSSHInput{}, errors.Join(errs...)
+		return testInput{}, errors.Join(errs...)
 	}
 
-	return generateSSHInput{
-		subject:   subject,
+	return testInput{
 		ca:        ca,
-		comment:   comment,
-		duration:  validDuration,
 		algorithm: algorithm,
+		duration:  validDuration,
 		password:  []byte(password),
 	}, nil
-}
-
-func pseudorandomInputForIssueSSH(r *rand.Rand, certificateType sshman.CertificateType) (issueSSHInput, error) {
-
-	ca, err := pseudorandomCA(r)
-	if err != nil {
-		return issueSSHInput{}, fmt.Errorf("error generating pseudo-random CA: %v", err)
-	}
-
-	algorithm := pseudorandomAlgorithm(r)
-
-	comment, err := pseudorandom.String(r, 1, 256, true)
-	if err != nil {
-		return issueSSHInput{}, fmt.Errorf("error generating pseudo-random comment: %v", err)
-	}
-
-	password, err := pseudorandom.PasswordFor(r, pseudorandom.PasswordProfileSSHKey)
-	if err != nil {
-		return issueSSHInput{}, fmt.Errorf("error generating pseudo-random password for SSH key: %v", err)
-	}
-
-	reader := pseudorandom.New(r)
-
-	keyPair, err := sshman.GenerateKeyPair(reader, algorithm, comment, []byte(password))
-	if err != nil {
-		return issueSSHInput{}, fmt.Errorf("error generating a random CA: %v", err)
-	}
-
-	publicKey, _, err := keyPair.Parse()
-	if err != nil {
-		return issueSSHInput{}, fmt.Errorf("error parsing key pair: %v", err)
-	}
-
-	serial, err := pseudorandom.BigInteger(r, 65, 128)
-	if err != nil {
-		return issueSSHInput{}, fmt.Errorf("error generating pseudo-random serial number for SSH certificate: %v", err)
-	}
-
-	keyId, err := pseudorandom.String(r, 1, 256, true)
-	if err != nil {
-		return issueSSHInput{}, fmt.Errorf("error generating pseudo-random key ID for SSH certificate: %v", err)
-	}
-
-	duration, err := pseudorandom.Duration(r, 5*time.Second, 30*365*24*time.Hour)
-	if err != nil {
-		return issueSSHInput{}, fmt.Errorf("error generating pseudo-random duration for SSH certificate: %v", err)
-	}
-
-	certificate := ssh.Certificate{
-		Key:         publicKey,
-		Serial:      serial.Uint64(),
-		KeyId:       keyId,
-		ValidAfter:  uint64(time.Now().Unix()),
-		ValidBefore: uint64(time.Now().Add(duration).Unix()),
-	}
-
-	if certificateType == sshman.HostCert {
-		certificate.CertType = ssh.HostCert
-	} else {
-		certificate.CertType = ssh.UserCert
-		certificate.ValidPrincipals = []string{pseudorandom.Username(r, false, true, nil)}
-	}
-
-	return issueSSHInput{
-		ca:          ca,
-		keyPair:     keyPair,
-		certificate: &certificate,
-		comment:     comment,
-	}, nil
-
 }
 
 func pseudorandomSubjectComment(r *rand.Rand) (mockSubject, string, error) {
