@@ -12,7 +12,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/copartner6412/input/validate"
 )
@@ -235,35 +234,14 @@ func validateDeleteHostFromClienConfigInput(subject Subject, clientConfigPath st
 		errs = append(errs, fmt.Errorf("invalid subject: %w", err))
 	}
 
-	currentUser, err := user.Current()
-	if err != nil {
-		return fmt.Errorf("error getting current user: %w", err)
+	if clientConfigPath == "" {
+		errs = append(errs, errors.New("empty string for path to user-specific SSH client configuration file")) 
+		return errors.Join(errs...)
 	}
 
-	userUid, err := strconv.Atoi(currentUser.Uid)
-	if err != nil {
-		return fmt.Errorf("error getting current user's UID: %w", err)
-	}
-
-	if clientConfigPath != "" && !filepath.IsAbs(clientConfigPath) {
-		errs = append(errs, fmt.Errorf("path to user-specific SSH client configuration file %s is not an absolute path", clientConfigPath))
-	} else if clientConfigPath != "" {
-		info, err := os.Stat(clientConfigPath)
-		if os.IsNotExist(err) {
-			errs = append(errs, fmt.Errorf("file %s not existant", clientConfigPath))
-		}
-
-		if len(errs) > 0 {
-			return errors.Join(errs...)
-		}
-
-		stat, ok := info.Sys().(*syscall.Stat_t)
-		if !ok {
-			return fmt.Errorf("error getting syscall information of file %s: %w", clientConfigPath, err)
-		}
-		if currentUser.Username != "root" && stat.Uid != uint32(userUid) {
-			errs = append(errs, fmt.Errorf("current user %s is not owner of user-specific SSH client configuration file %s", currentUser.Username, clientConfigPath))
-		}
+	if !filepath.IsAbs(clientConfigPath) {
+		errs = append(errs, fmt.Errorf("path to user-specific SSH client configuration file \"%s\" is not an absolute path", clientConfigPath))
+		return errors.Join(errs...)
 	}
 
 	if len(errs) > 0 {
@@ -359,39 +337,20 @@ func validateAddHostToClientConfigInput(subject Subject, clientConfigPath, priva
 		return errors.Join(errs...)
 	}
 
-	currentUser, err := user.Current()
-	if err != nil {
-		return fmt.Errorf("error getting current user: %w", err)
-	}
-
-	userUid, err := strconv.Atoi(currentUser.Uid)
-	if err != nil {
-		return fmt.Errorf("error getting current user's UID: %w", err)
-	}
-
 	paths := map[string]string{
-		"user-specific SSH client configuration file": clientConfigPath,
-		"SSH private key file":                        privateKeyPath,
-		"SSH certificate file":                        certificatePath,
+		"user-specific SSH client configuration": clientConfigPath,
+		"SSH private key":                        privateKeyPath,
+		"SSH certificate":                        certificatePath,
 	}
 
 	for name, path := range paths {
-		if path != "" && !filepath.IsAbs(path) {
-			errs = append(errs, fmt.Errorf("path to %s %s is not an absolute path", name, clientConfigPath))
-		} else if path != "" {
-			info, err := os.Stat(path)
-			if os.IsNotExist(err) {
-				errs = append(errs, fmt.Errorf("file %s not existant", path))
-				continue
-			}
-
-			stat, ok := info.Sys().(*syscall.Stat_t)
-			if !ok {
-				return fmt.Errorf("error getting syscall information of file %s: %w", path, err)
-			}
-			if currentUser.Username != "root" && stat.Uid != uint32(userUid) {
-				errs = append(errs, fmt.Errorf("current user %s is not owner of %s %s", currentUser.Username, name, path))
-			}
+		if path == "" {
+			errs = append(errs, fmt.Errorf("empty path for %s file", name)) 
+			continue
+		}
+	
+		if !filepath.IsAbs(clientConfigPath) {
+			errs = append(errs, fmt.Errorf("path to %s file \"%s\" is not an absolute path", name, clientConfigPath))
 		}
 	}
 

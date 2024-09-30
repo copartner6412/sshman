@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -80,14 +81,14 @@ func (k *KeyPair) Parse() (publicKey ssh.PublicKey, privateKey ssh.Signer, err e
 		return nil, nil, errors.Join(errs...)
 	}
 
-	if !areKeysMatched(publicKey, privateKey) {
+	if !arePublicAndPrivateKeysMatched(publicKey, privateKey) {
 		return nil, nil, errors.New("key pair mismatch")
 	}
 
 	return publicKey, privateKey, nil
 }
 
-func areKeysMatched(publicKey ssh.PublicKey, privateKey ssh.Signer) bool {
+func arePublicAndPrivateKeysMatched(publicKey ssh.PublicKey, privateKey ssh.Signer) bool {
 	derivedPublicKey := privateKey.PublicKey()
 
 	// Compare the key types
@@ -200,4 +201,44 @@ func validateNewSSHInput(keyPair *KeyPair, certificateBytes []byte) error {
 	}
 
 	return nil
+}
+
+func (k *KeyPair) SignCertificateRequest(rand io.Reader, CertificateRequestBytes []byte, NotBefore, NotAfter time.Time) (certificateBytes []byte, err error) {
+	var errs []error
+
+	_, caPrivateKey, err := k.Parse()
+	if err != nil {
+		errs = append(errs, fmt.Errorf("error parsing authority key pair: %w", err))
+	}
+
+	certificateRequest, err := ParseCertificateRequest(CertificateRequestBytes)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("error parsing certificate request: %w", err)) 
+	}
+
+	if len(errs) > 0 {
+		return nil, fmt.Errorf("invalid input: %w", errors.Join(errs...))
+	}
+
+	publicKey, _, _, _, err := ssh.ParseAuthorizedKey(certificateRequest.AuthorizedPublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing authorized public key in certificate request: %w", err)
+	}
+
+	certificate := &ssh.Certificate{
+		Key:             publicKey,
+		Serial:          certificateRequest.SerialNumber.Uint64(),
+		CertType:        getCertType(certificateRequest.CertificateType),
+		KeyId:           certificateRequest.KeyId,
+		ValidPrincipals: certificateRequest.ValidPrincipals,
+		ValidAfter: 	 uint64(NotBefore.Unix()),
+		ValidBefore: 	 uint64(NotAfter.Unix()),
+		Permissions:     ssh.Permissions{CriticalOptions: certificateRequest.CriticalOptions, Extensions: certificateRequest.Extensions},
+	}
+
+	if err := certificate.SignCert(rand, caPrivateKey); err != nil {
+		return nil, fmt.Errorf("error signing certificate: %w", err)
+	}
+
+	return ssh.MarshalAuthorizedKey(certificate), nil
 }

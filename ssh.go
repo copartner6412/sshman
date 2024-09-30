@@ -63,40 +63,21 @@ func (s *SSH) Equal(sshAsset SSH) bool {
 }
 
 func (s *SSH) Parse() (publicKey ssh.PublicKey, privateKey ssh.Signer, certificate *ssh.Certificate, err error) {
+	if err := sshNotZero(s); err != nil {
+		return nil, nil, nil, err
+	}
+	
 	var errs []error
 	var ok bool
-
-	if s.PublicKey == nil {
-		errs = append(errs, fmt.Errorf("nil public key"))
-	}
-
-	if s.PrivateKey == nil {
-		errs = append(errs, fmt.Errorf("nil private key"))
-	}
-
-	if s.Certificate == nil {
-		errs = append(errs, fmt.Errorf("nil pointer to certificate"))
-	}
-
-	if len(errs) > 0 {
-		return nil, nil, nil, errors.Join(errs...)
-	}
 
 	publicKey, _, _, _, err = ssh.ParseAuthorizedKey(s.PublicKey)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("error parsing public key: %w", err))
 	}
 
-	if s.PrivateKeyPassword == nil {
-		privateKey, err = ssh.ParsePrivateKey(s.PrivateKey)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("error parsing private key with password: %w", err))
-		}
-	} else {
-		privateKey, err = ssh.ParsePrivateKeyWithPassphrase(s.PrivateKey, s.PrivateKeyPassword)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("error parsing private key: %w", err))
-		}
+	privateKey, err = parsePrivateKey(s.PrivateKey, s.PrivateKeyPassword)
+	if err != nil {
+		errs = append(errs, err)
 	}
 
 	certificateNotTypeAsserted, _, _, _, err := ssh.ParseAuthorizedKey(s.Certificate)
@@ -112,7 +93,7 @@ func (s *SSH) Parse() (publicKey ssh.PublicKey, privateKey ssh.Signer, certifica
 		return nil, nil, nil, fmt.Errorf("invalid type for certificate: %w", err)
 	}
 
-	if !areKeysMatched(certificate.Key, privateKey) {
+	if !arePublicAndPrivateKeysMatched(certificate.Key, privateKey) {
 		return nil, nil, nil, errors.New("key pair mismatch")
 	}
 
@@ -121,6 +102,48 @@ func (s *SSH) Parse() (publicKey ssh.PublicKey, privateKey ssh.Signer, certifica
 	}
 
 	return publicKey, privateKey, certificate, nil
+}
+
+func sshNotZero(s *SSH) error {
+	if s.IsZero() {
+		return errors.New("empty SSH")
+	}
+
+	var errs []error
+	
+	if len(s.PublicKey) == 0 {
+		errs = append(errs, errors.New("empty byte slice for public key field"))
+	}
+
+	if len(s.PrivateKey) == 0 {
+		errs = append(errs, errors.New("empty byte slice for private key field"))
+	}
+
+	if len(s.Certificate) == 0 {
+		errs = append(errs, errors.New("empty byte slice for certificate field"))
+	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+
+	return nil
+}
+
+func parsePrivateKey(privateKeyBytes,privateKeyPasswordBytes []byte) (privateKey ssh.Signer, err error) {
+	if len(privateKeyPasswordBytes) == 0 {
+		privateKey, err = ssh.ParsePrivateKey(privateKeyBytes)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing private key with password: %w", err)
+		}
+	} else {
+		privateKey, err = ssh.ParsePrivateKeyWithPassphrase(privateKeyBytes, privateKeyPasswordBytes)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing private key: %w", err)
+		}
+	}
+
+	return privateKey, nil
 }
 
 func arePublicKeyAndCertificateMatched(certificate *ssh.Certificate, publicKey ssh.PublicKey) bool {
