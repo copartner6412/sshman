@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
-	"strings"
 	"time"
 
 	"github.com/copartner6412/input/pseudorandom"
@@ -88,7 +87,7 @@ func pseudorandomTestInput(r *rand.Rand) (testInput, error) {
 	}, nil
 }
 
-func pseudorandomSubjectComment(r *rand.Rand) (mockSubject, string, error) {
+func pseudorandomSubject(r *rand.Rand) (mockSubject, error) {
 	var errs []error
 
 	user := pseudorandom.Username(r, false, true, nil)
@@ -116,15 +115,9 @@ func pseudorandomSubjectComment(r *rand.Rand) (mockSubject, string, error) {
 	}
 
 	if len(errs) > 0 {
-		return mockSubject{}, "", errors.Join(errs...)
+		return mockSubject{}, errors.Join(errs...)
 	}
 
-	var comments []string
-	host := append([]string{}, domain, hostname, ipv4.String(), ipv6.String())
-	for _, h := range host {
-		comments = append(comments, user+"@"+h)
-	}
-	comment := strings.Join(comments, " ")
 
 	return mockSubject{
 		user:     user,
@@ -133,7 +126,7 @@ func pseudorandomSubjectComment(r *rand.Rand) (mockSubject, string, error) {
 		hostname: hostname,
 		ipv4:     ipv4.String(),
 		ipv6:     ipv6.String(),
-	}, comment, nil
+	}, nil
 }
 
 func pseudorandomAlgorithm(r *rand.Rand) sshman.Algorithm {

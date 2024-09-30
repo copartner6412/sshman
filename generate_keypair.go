@@ -5,7 +5,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/copartner6412/input/random"
 	"golang.org/x/crypto/ssh"
@@ -38,44 +37,6 @@ func GenerateKeyPair(randomness io.Reader, algorithm Algorithm, comment string, 
 	}
 
 	return keyPair, nil
-}
-
-func validateAlgorithm(algorithm Algorithm, weaks []Algorithm) error {
-	for _, weak := range weaks {
-		if algorithm == weak {
-			return fmt.Errorf("weak algorithm: %s", algorithm.String())
-		}
-	}
-
-	if algorithm > 8 {
-		return fmt.Errorf("unsupport algorithm type")
-	}
-
-	return nil
-}
-
-func generateCommentForSubject(subject Subject) string {
-	users := subject.GetSSHUser()
-	hosts := []string{}
-	comments := []string{}
-
-	hostname := subject.GetHostname()
-
-	if hostname != "" {
-		hosts = []string{hostname}
-	}
-
-	hosts = append(hosts, subject.GetDomain()...)
-	hosts = append(hosts, subject.GetIPv4()...)
-	hosts = append(hosts, subject.GetIPv6()...)
-
-	for _, user := range users {
-		for _, host := range hosts {
-			comments = append(comments, user+"@"+host)
-		}
-	}
-
-	return strings.Join(comments, "")
 }
 
 // encodePrivateKey encodes the private key in PEM format, optionally encrypting it with a password.

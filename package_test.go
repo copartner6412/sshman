@@ -15,10 +15,12 @@ func FuzzPackage(f *testing.F) {
 		t.Parallel()
 		r := rand.New(rand.NewPCG(seed1, seed2))
 
-		subject, comment, err := pseudorandomSubjectComment(r)
+		subject, err := pseudorandomSubject(r)
 		if err != nil {
-			t.Fatalf("error generating pseudo-random subject and corresponding comment: %v", err)
+			t.Fatalf("error generating pseudo-random subject: %v", err)
 		}
+
+		comment := sshman.CommentFor(subject)
 
 		userInput, err := pseudorandomTestInput(r)
 		if err != nil {
@@ -90,10 +92,6 @@ func FuzzPackage(f *testing.F) {
 
 		if _, err := sshman.AddHostToClientConfig(subject, clientConfigPath, privateKeyPath, ""); err != nil {
 			t.Fatalf("error adding host to client config: %v", err)
-		}
-
-		if err := sshman.DeleteHostFromClientConfig(subject, clientConfigPath); err != nil {
-			t.Fatalf("error deleting host from client config: %v", err)
 		}
 
 		userCertificateRequestBytes, err := sshman.NewCertificateRequest(subject, userKeyPair.PublicKey, sshman.UserCert, userInput.duration, nil, nil)
@@ -175,6 +173,10 @@ func FuzzPackage(f *testing.F) {
 
 		if _, err := sshman.AddHostToClientConfig(subject, clientConfigPath, privateKeyPath, certificatePath); err != nil {
 			t.Fatalf("error adding host private key and certificate to client config: %v", err)
+		}
+
+		if err := sshman.DeleteHostFromClientConfig(subject, clientConfigPath); err != nil {
+			t.Fatalf("error deleting host from client config: %v", err)
 		}
 
 		if err := sshman.TestSSH(userSSH, hostSSH, userInput.ca.PublicKey, hostInput.ca.PublicKey); err != nil {
