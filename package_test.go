@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/copartner6412/input/pseudorandom"
 	"github.com/copartner6412/sshman"
@@ -20,7 +21,7 @@ func FuzzPackage(f *testing.F) {
 			t.Fatalf("error generating pseudo-random subject: %v", err)
 		}
 
-		comment := sshman.CommentFor(subject)
+		comment := sshman.CreateCommentForSubject(subject)
 
 		userInput, err := pseudorandomTestInput(r)
 		if err != nil {
@@ -94,12 +95,12 @@ func FuzzPackage(f *testing.F) {
 			t.Fatalf("error adding host to client config: %v", err)
 		}
 
-		userCertificateRequestBytes, err := sshman.NewCertificateRequest(subject, userKeyPair.PublicKey, sshman.UserCert, userInput.duration, nil, nil)
+		userCertificateRequestBytes, err := sshman.CreateCertificateRequest(subject, userKeyPair.PublicKey, sshman.UserCert, nil, nil)
 		if err != nil {
 			t.Fatalf("error generating a request for user public key: %v", err)
 		}
 
-		hostCertificateRequestBytes, err := sshman.NewCertificateRequest(subject, hostKeyPair.PublicKey, sshman.HostCert, hostInput.duration, nil, nil)
+		hostCertificateRequestBytes, err := sshman.CreateCertificateRequest(subject, hostKeyPair.PublicKey, sshman.HostCert, nil, nil)
 		if err != nil {
 			t.Fatalf("error generating a request for host public key: %v", err)
 		}
@@ -114,12 +115,12 @@ func FuzzPackage(f *testing.F) {
 			t.Fatalf("error parsing host certificate request: %v", err)
 		}
 
-		userCertificateBytes, err := userCertificateRequest.SignRequest(reader, userInput.ca)
+		userCertificateBytes, err := userCertificateRequest.SignCertificateRequest(reader, userInput.ca, time.Now(), time.Now().Add(userInput.duration))
 		if err != nil {
 			t.Fatalf("error signing user certificate request: %v", err)
 		}
 
-		hostCertificateBytes, err := hostCertificateRequest.SignRequest(reader, hostInput.ca)
+		hostCertificateBytes, err := hostCertificateRequest.SignCertificateRequest(reader, hostInput.ca, time.Now(), time.Now().Add(userInput.duration))
 		if err != nil {
 			t.Fatalf("error signing host certificate request: %v", err)
 		}

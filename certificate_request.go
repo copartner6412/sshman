@@ -17,8 +17,6 @@ type CertificateRequest struct {
 	CertificateType     CertificateType
 	KeyId               string
 	ValidPrincipals     []string
-	ValidAfter          time.Time
-	ValidBefore         time.Time
 	CriticalOptions     map[string]string
 	Extensions          map[string]string
 }
@@ -31,7 +29,7 @@ func (cr CertificateRequest) Marshal() ([]byte, error) {
 	return buf.Bytes(), err
 }
 
-func (cr CertificateRequest) SignRequest(rand io.Reader, authority *KeyPair) (certificateBytes []byte, err error) {
+func (cr CertificateRequest) SignCertificateRequest(rand io.Reader, authority *KeyPair, NotBefore, NotAfter time.Time) (certificateBytes []byte, err error) {
 	_, caPrivateKey, err := authority.Parse()
 	if err != nil {
 		return nil, fmt.Errorf("error parsing authority key pair: %w", err)
@@ -48,8 +46,8 @@ func (cr CertificateRequest) SignRequest(rand io.Reader, authority *KeyPair) (ce
 		CertType:        getCertType(cr.CertificateType),
 		KeyId:           cr.KeyId,
 		ValidPrincipals: cr.ValidPrincipals,
-		ValidAfter:      uint64(cr.ValidAfter.Unix()),
-		ValidBefore:     uint64(cr.ValidBefore.Unix()),
+		ValidAfter: 	 uint64(NotBefore.Unix()),
+		ValidBefore: 	 uint64(NotAfter.Unix()),
 		Permissions:     ssh.Permissions{CriticalOptions: cr.CriticalOptions, Extensions: cr.Extensions},
 	}
 

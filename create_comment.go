@@ -2,7 +2,7 @@ package sshman
 
 import "strings"
 
-func CommentFor(subject Subject) string {
+func CreateCommentForSubject(subject Subject) string {
 	comments := []string{}
 	users := subject.GetSSHUser()
 	comments = append(comments, users...)
