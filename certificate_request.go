@@ -1,59 +1,87 @@
 package sshman
 
 import (
-	"bytes"
-	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"io"
-	"math/big"
 	"time"
 
 	"golang.org/x/crypto/ssh"
 )
 
 type CertificateRequest struct {
-	AuthorizedPublicKey []byte
-	SerialNumber        *big.Int
+	Requester			string
+	PublicKey 			[]byte
+	RequestedUser		string
+	RequestedHost    	string
 	CertificateType     CertificateType
-	KeyId               string
-	ValidPrincipals     []string
-	CriticalOptions     map[string]string
-	Extensions          map[string]string
+	Signature 			[]byte
 }
 
-func (cr CertificateRequest) Marshal() ([]byte, error) {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-
-	err := enc.Encode(cr)
-	return buf.Bytes(), err
+func (cr *CertificateRequest) Marshal() ([]byte, error) {
+	return json.Marshal(cr)
 }
 
-func (cr CertificateRequest) SignCertificateRequest(rand io.Reader, authority *KeyPair, NotBefore, NotAfter time.Time) (certificateBytes []byte, err error) {
-	_, caPrivateKey, err := authority.Parse()
+func (cr *CertificateRequest) Sign(randomness io.Reader, authenticationKeyPair *KeyPair) error {
+	_, privateKey, err := authenticationKeyPair.Parse()
 	if err != nil {
-		return nil, fmt.Errorf("error parsing authority key pair: %w", err)
+		return fmt.Errorf("error parsing authentication key pair: %w", err)
 	}
 
-	publicKey, _, _, _, err := ssh.ParseAuthorizedKey(cr.AuthorizedPublicKey)
+	data, err := marshalCertificateRequestWithoutSignature(cr)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing public key in certificate request: %w", err)
+		return fmt.Errorf("error marshaling certificate request: %w", err)
 	}
 
-	certificate := &ssh.Certificate{
-		Key:             publicKey,
-		Serial:          cr.SerialNumber.Uint64(),
-		CertType:        getCertType(cr.CertificateType),
-		KeyId:           cr.KeyId,
-		ValidPrincipals: cr.ValidPrincipals,
-		ValidAfter: 	 uint64(NotBefore.Unix()),
-		ValidBefore: 	 uint64(NotAfter.Unix()),
-		Permissions:     ssh.Permissions{CriticalOptions: cr.CriticalOptions, Extensions: cr.Extensions},
+	signature, err := privateKey.Sign(randomness, data)
+	if err != nil {
+		return fmt.Errorf("error signing the certificate request: %w", err)
 	}
 
-	if err := certificate.SignCert(rand, caPrivateKey); err != nil {
-		return nil, fmt.Errorf("error signing certificate: %w", err)
+	cr.Signature = ssh.Marshal(signature)
+
+	return nil
+}
+
+func marshalCertificateRequestWithoutSignature(certificateRequest *CertificateRequest) ([]byte, error) {
+	crCopy := struct {
+		Requester       string
+		PublicKey       []byte
+		RequestedUser   string
+		RequestedHost   string
+		CertificateType CertificateType
+	}{
+		Requester:       certificateRequest.Requester,
+		PublicKey:       certificateRequest.PublicKey,
+		RequestedUser:   certificateRequest.RequestedUser,
+		RequestedHost:   certificateRequest.RequestedHost,
+		CertificateType: certificateRequest.CertificateType,
 	}
 
-	return ssh.MarshalAuthorizedKey(certificate), nil
+	return json.Marshal(crCopy)
+}
+
+func (cr *CertificateRequest) VerifySignature(authenticationPublicKeyBytes []byte) error {
+	data, err := marshalCertificateRequestWithoutSignature(cr)
+	if err != nil {
+		return fmt.Errorf("error marshaling certificate request: %w", err)
+	}
+
+	publicKey, _, _, _, err := ssh.ParseAuthorizedKey(authenticationPublicKeyBytes)
+	if err != nil {
+		return fmt.Errorf("error parsing public key: %w", err)
+	}
+
+	var signature *ssh.Signature
+    err = ssh.Unmarshal(cr.Signature, signature)
+    if err != nil {
+        return fmt.Errorf("error unmarshaling signature: %w", err)
+    }
+
+	err = publicKey.Verify(data, signature)
+    if err != nil {
+        return fmt.Errorf("signature verification failed: %w", err)
+    }
+
+	return nil
 }

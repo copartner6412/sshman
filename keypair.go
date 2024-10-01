@@ -64,30 +64,39 @@ func (k *KeyPair) Parse() (publicKey ssh.PublicKey, privateKey ssh.Signer, err e
 		errs = append(errs, fmt.Errorf("error parsing public key: %w", err))
 	}
 
-	if k.PrivateKeyPassword != nil {
-		privateKey, err = ssh.ParsePrivateKeyWithPassphrase(k.PrivateKey, k.PrivateKeyPassword)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("error parsing private key: %w", err))
-		}
-	} else {
-		privateKey, err = ssh.ParsePrivateKey(k.PrivateKey)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("error parsing private key with password: %w", err))
-		}
+	privateKey, err = parsePrivateKey(k.PrivateKey, k.PrivateKeyPassword)
+	if err != nil {
+		errs = append(errs, err)
 	}
 
 	if len(errs) > 0 {
 		return nil, nil, errors.Join(errs...)
 	}
 
-	if !areKeysMatched(publicKey, privateKey) {
+	if !arePublicAndPrivateKeysMatched(publicKey, privateKey) {
 		return nil, nil, errors.New("key pair mismatch")
 	}
 
 	return publicKey, privateKey, nil
 }
 
-func areKeysMatched(publicKey ssh.PublicKey, privateKey ssh.Signer) bool {
+func parsePrivateKey(privateKeyPEMBytes, privateKeyPasswordBytes []byte) (privateKey ssh.Signer,err error) {
+	if len(privateKeyPasswordBytes) != 0 {
+		privateKey, err = ssh.ParsePrivateKeyWithPassphrase(privateKeyPEMBytes, privateKeyPasswordBytes)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing private key with password: %w", err)
+		}
+	} else {
+		privateKey, err = ssh.ParsePrivateKey(privateKeyPEMBytes)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing private %w", err)
+		}
+	}
+
+	return privateKey, nil
+}
+
+func arePublicAndPrivateKeysMatched(publicKey ssh.PublicKey, privateKey ssh.Signer) bool {
 	derivedPublicKey := privateKey.PublicKey()
 
 	// Compare the key types

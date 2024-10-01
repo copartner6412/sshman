@@ -87,16 +87,9 @@ func (s *SSH) Parse() (publicKey ssh.PublicKey, privateKey ssh.Signer, certifica
 		errs = append(errs, fmt.Errorf("error parsing public key: %w", err))
 	}
 
-	if s.PrivateKeyPassword == nil {
-		privateKey, err = ssh.ParsePrivateKey(s.PrivateKey)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("error parsing private key with password: %w", err))
-		}
-	} else {
-		privateKey, err = ssh.ParsePrivateKeyWithPassphrase(s.PrivateKey, s.PrivateKeyPassword)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("error parsing private key: %w", err))
-		}
+	privateKey, err = parsePrivateKey(s.PrivateKey, s.PrivateKeyPassword)
+	if err != nil {
+		errs = append(errs, err)
 	}
 
 	certificateNotTypeAsserted, _, _, _, err := ssh.ParseAuthorizedKey(s.Certificate)
@@ -112,7 +105,7 @@ func (s *SSH) Parse() (publicKey ssh.PublicKey, privateKey ssh.Signer, certifica
 		return nil, nil, nil, fmt.Errorf("invalid type for certificate: %w", err)
 	}
 
-	if !areKeysMatched(certificate.Key, privateKey) {
+	if !arePublicAndPrivateKeysMatched(certificate.Key, privateKey) {
 		return nil, nil, nil, errors.New("key pair mismatch")
 	}
 
