@@ -15,43 +15,11 @@ const (
 	maxDuration time.Duration = 20 * 365 * 24 * time.Hour // 20 years
 )
 
-type mockSubject struct {
-	user     string
-	port     uint16
-	domain   string
-	hostname string
-	ipv4     string
-	ipv6     string
-}
-
-func (s mockSubject) GetSSHUser() []string {
-	return []string{s.user}
-}
-
-func (s mockSubject) GetSSHPort() uint16 {
-	return s.port
-}
-
-func (s mockSubject) GetDomain() []string {
-	return []string{s.domain}
-}
-
-func (s mockSubject) GetHostname() string {
-	return s.hostname
-}
-
-func (s mockSubject) GetIPv4() []string {
-	return []string{"127.0.0.1", s.ipv4}
-}
-
-func (s mockSubject) GetIPv6() []string {
-	return []string{s.ipv6}
-}
-
 type testInput struct {
 	ca        *sshman.KeyPair
 	duration  time.Duration
 	algorithm sshman.Algorithm
+	comment   string
 	password  []byte
 }
 
@@ -84,48 +52,6 @@ func pseudorandomTestInput(r *rand.Rand) (testInput, error) {
 		algorithm: algorithm,
 		duration:  validDuration,
 		password:  []byte(password),
-	}, nil
-}
-
-func pseudorandomSubject(r *rand.Rand) (mockSubject, error) {
-	var errs []error
-
-	user := pseudorandom.Username(r, false, true, nil)
-
-	port := pseudorandom.PortPrivate(r)
-
-	domain, err := pseudorandom.Domain(r, 0, 0)
-	if err != nil {
-		errs = append(errs, err)
-	}
-
-	hostname, err := pseudorandom.LinuxHostname(r, 0, 0)
-	if err != nil {
-		errs = append(errs, err)
-	}
-
-	ipv4, err := pseudorandom.IPv4(r, "")
-	if err != nil {
-		errs = append(errs, err)
-	}
-
-	ipv6, err := pseudorandom.IPv6(r, "")
-	if err != nil {
-		errs = append(errs, err)
-	}
-
-	if len(errs) > 0 {
-		return mockSubject{}, errors.Join(errs...)
-	}
-
-
-	return mockSubject{
-		user:     user,
-		port:     port,
-		domain:   domain,
-		hostname: hostname,
-		ipv4:     ipv4.String(),
-		ipv6:     ipv6.String(),
 	}, nil
 }
 

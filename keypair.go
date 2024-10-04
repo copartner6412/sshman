@@ -80,7 +80,7 @@ func (k *KeyPair) Parse() (publicKey ssh.PublicKey, privateKey ssh.Signer, err e
 	return publicKey, privateKey, nil
 }
 
-func parsePrivateKey(privateKeyPEMBytes, privateKeyPasswordBytes []byte) (privateKey ssh.Signer,err error) {
+func parsePrivateKey(privateKeyPEMBytes, privateKeyPasswordBytes []byte) (privateKey ssh.Signer, err error) {
 	if len(privateKeyPasswordBytes) != 0 {
 		privateKey, err = ssh.ParsePrivateKeyWithPassphrase(privateKeyPEMBytes, privateKeyPasswordBytes)
 		if err != nil {

@@ -1,14 +1,15 @@
 package sshman
 
 import (
-	"bytes"
-	"encoding/gob"
+	"encoding/asn1"
 )
 
-func ParseCertificateRequest(certificateRequestBytes []byte) (CertificateRequest, error) {
-	var cr CertificateRequest
-	buf := bytes.NewBuffer(certificateRequestBytes)
-	dec := gob.NewDecoder(buf)
-	err := dec.Decode(&cr)
-	return cr, err
+func ParseCertificateRequest(certificateRequestBytes []byte) (*CertificateRequest, error) {
+	cr := new(CertificateRequest)
+	_, err := asn1.Unmarshal(certificateRequestBytes, cr)
+	if err != nil {
+		return nil, err
+	}
+
+	return cr, nil
 }

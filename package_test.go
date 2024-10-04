@@ -1,6 +1,7 @@
 package sshman_test
 
 import (
+	cryptorand "crypto/rand"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
@@ -16,57 +17,58 @@ func FuzzPackage(f *testing.F) {
 		t.Parallel()
 		r := rand.New(rand.NewPCG(seed1, seed2))
 
-		subject, err := pseudorandomSubject(r)
-		if err != nil {
-			t.Fatalf("error generating pseudo-random subject: %v", err)
-		}
-
-		comment := sshman.CreateCommentForSubject(subject)
-
 		userInput, err := pseudorandomTestInput(r)
 		if err != nil {
-			t.Fatalf("error generating pseudo-random input for user: %v", err)
+			t.Fatalf("error generating pseudorandom test input for user: %v", err)
 		}
 
 		hostInput, err := pseudorandomTestInput(r)
 		if err != nil {
-			t.Fatalf("error generating pseudo-random input for host: %v", err)
+			t.Fatalf("error generating pseudorandom test input for host: %v", err)
 		}
 
-		reader := pseudorandom.New(r)
-
-		generatedUserKeyPair, err := sshman.GenerateKeyPair(reader, userInput.algorithm, comment, userInput.password)
+		generatedUserKeyPair, err := sshman.GenerateKeyPair(cryptorand.Reader, userInput.algorithm, userInput.comment, userInput.password)
 		if err != nil {
 			t.Fatalf("error generating a pseudo-random key pair for user: %v", err)
 		}
 
-		generatedHostKeyPair, err := sshman.GenerateKeyPair(reader, hostInput.algorithm, comment, hostInput.password)
+		generatedHostKeyPair, err := sshman.GenerateKeyPair(cryptorand.Reader, hostInput.algorithm, hostInput.comment, hostInput.password)
 		if err != nil {
 			t.Fatalf("error generating a pseudo-random key pair for host: %v", err)
 		}
 
-		userKeyPairDir := t.TempDir()
-		hostKeyPairDir := t.TempDir()
+		userSSHKeyPairDir := t.TempDir()
+		hostSSHKeyPairDir := t.TempDir()
 
-		if err := generatedUserKeyPair.Save(userKeyPairDir); err != nil {
+		if err := generatedUserKeyPair.Save(userSSHKeyPairDir); err != nil {
 			t.Fatalf("error saving user key pair: %v", err)
 		}
 
-		if err := generatedHostKeyPair.Save(hostKeyPairDir); err != nil {
+		if err := generatedHostKeyPair.Save(hostSSHKeyPairDir); err != nil {
 			t.Fatalf("error saving host key pair: %v", err)
 		}
 
-		userKeyPair, err := sshman.LoadKeyPair(userKeyPairDir, generatedUserKeyPair.PrivateKeyPassword)
+		userSSHKeyPair, err := sshman.LoadKeyPair(userSSHKeyPairDir, generatedUserKeyPair.PrivateKeyPassword)
 		if err != nil {
-			t.Fatalf("error loading user key pair: %v", err)
+			t.Fatalf("error loading user ssh key pair: %v", err)
 		}
 
-		hostKeyPair, err := sshman.LoadKeyPair(hostKeyPairDir, generatedHostKeyPair.PrivateKeyPassword)
+		hostSSHKeyPair, err := sshman.LoadKeyPair(hostSSHKeyPairDir, generatedHostKeyPair.PrivateKeyPassword)
 		if err != nil {
-			t.Fatalf("error loading host key pair: %v", err)
+			t.Fatalf("error loading host ssh key pair: %v", err)
 		}
 
-		if err := sshman.AddKeyToSSHAgent(userKeyPair); err != nil {
+		userAuthenticationKeyPair, err := sshman.GenerateKeyPair(cryptorand.Reader, hostInput.algorithm, userInput.comment, userInput.password)
+		if err != nil {
+			t.Fatalf("error loading user authenticationkey pair: %v", err)
+		}
+
+		hostAuthenticationKeyPair, err := sshman.GenerateKeyPair(cryptorand.Reader, userInput.algorithm, hostInput.comment, hostInput.password)
+		if err != nil {
+			t.Fatalf("error loading user authenticationkey pair: %v", err)
+		}
+
+		if err := sshman.AddKeyToSSHAgent(userSSHKeyPair); err != nil {
 			t.Fatalf("error adding private key to SSH agent: %v", err)
 		}
 
@@ -82,55 +84,173 @@ func FuzzPackage(f *testing.F) {
 			certificatePath string
 		)
 
-		switch userInput.algorithm {
-		case sshman.AlgorithmUntyped, sshman.AlgorithmED25519:
-			privateKeyPath = filepath.Join(userKeyPairDir, "id_ed25519")
-		case sshman.AlgorithmECDSAP256, sshman.AlgorithmECDSAP384, sshman.AlgorithmECDSAP521:
-			privateKeyPath = filepath.Join(userKeyPairDir, "id_ecdsa")
-		case sshman.AlgorithmRSA2048, sshman.AlgorithmRSA4096:
-			privateKeyPath = filepath.Join(userKeyPairDir, "id_rsa")
+		etcDir := t.TempDir()
+		authorizedHostsFilePath := filepath.Join(etcDir, "authorized_hosts.json")
+		authorizedRequestersFilePath := filepath.Join(etcDir, "authorized_requesters.json")
+		certificatePoliciesFilePath := filepath.Join(etcDir, "certificate_policies.json")
+		etcFiles := []string{authorizedHostsFilePath, authorizedRequestersFilePath, certificatePoliciesFilePath}
+		for _, file := range etcFiles {
+			if err := os.WriteFile(file, []byte("[]"), 0600); err != nil {
+				t.Fatalf("error creating %s: %v", filepath.Base(file), err)
+			}
 		}
 
-		if _, err := sshman.AddHostToClientConfig(subject, clientConfigPath, privateKeyPath, ""); err != nil {
-			t.Fatalf("error adding host to client config: %v", err)
-		}
-
-		userCertificateRequestBytes, err := sshman.CreateCertificateRequest(subject, userKeyPair.PublicKey, sshman.UserCert, nil, nil)
+		allRequesters, err := sshman.LoadCertificateRequesters(authorizedRequestersFilePath)
 		if err != nil {
-			t.Fatalf("error generating a request for user public key: %v", err)
+			t.Fatalf("error loading authorized requesters: %v", err)
 		}
 
-		hostCertificateRequestBytes, err := sshman.CreateCertificateRequest(subject, hostKeyPair.PublicKey, sshman.HostCert, nil, nil)
+		allRequesters, err = sshman.AddCertificateRequester(allRequesters, sshman.CertificateRequester{
+			ID:              "requester_1",
+			Name:            "user requester",
+			PublicKey:       userAuthenticationKeyPair.PublicKey,
+			CertificateType: sshman.UserCert,
+		})
 		if err != nil {
-			t.Fatalf("error generating a request for host public key: %v", err)
+			t.Fatalf("error adding user requester to authorized requesters: %v", err)
 		}
 
-		userCertificateRequest, err := sshman.ParseCertificateRequest(userCertificateRequestBytes)
+		t.Log(len(allRequesters))
+
+		allRequesters, err = sshman.AddCertificateRequester(allRequesters, sshman.CertificateRequester{
+			ID:              "requester_2",
+			Name:            "host requester",
+			PublicKey:       hostAuthenticationKeyPair.PublicKey,
+			CertificateType: sshman.HostCert,
+		})
 		if err != nil {
-			t.Fatalf("error parsing user certificate request: %v", err)
+			t.Fatalf("error adding host requester to authorized requesters: %v", err)
 		}
 
-		hostCertificateRequest, err := sshman.ParseCertificateRequest(hostCertificateRequestBytes)
-		if err != nil {
-			t.Fatalf("error parsing host certificate request: %v", err)
+		t.Log(len(allRequesters))
+
+		if err := sshman.SaveCertificateRequesters(authorizedRequestersFilePath, allRequesters); err != nil {
+			t.Fatalf("error saving authorized requesters file: %v", err)
 		}
 
-		userCertificateBytes, err := userCertificateRequest.SignCertificateRequest(reader, userInput.ca, time.Now(), time.Now().Add(userInput.duration))
+		t.Log("added user certificate requester")
+
+		data, _ := os.ReadFile(authorizedRequestersFilePath)
+		t.Log(string(data))
+
+		allHosts, err := sshman.LoadHosts(authorizedHostsFilePath)
 		if err != nil {
+			t.Fatalf("error loading authorized hosts file: %v", err)
+		}
+
+		port := pseudorandom.PortPrivate(r)
+
+		allHosts, err = sshman.AddHost(allHosts, sshman.Host{
+			ID:         "host_1",
+			IPv4s:      []string{"127.0.0.1"},
+			IPv6s:      []string{},
+			Domains:    []string{},
+			PublicKeys: [][]byte{hostSSHKeyPair.PublicKey},
+			Port:       port,
+			Users:      []string{"sshuser"},
+			Hostname:   "host_1",
+			SSHAddress: "127.0.0.1",
+		})
+		if err != nil {
+			t.Fatalf("error adding host: %v", err)
+		}
+
+		if err := sshman.SaveHosts(authorizedHostsFilePath, allHosts); err != nil {
+			t.Fatalf("error saving authorized hosts file: %v", err)
+		}
+
+		allPolicies, err := sshman.LoadCertificatePolicies(certificatePoliciesFilePath)
+		if err != nil {
+			t.Fatalf("error loading certificate policies: %v", err)
+		}
+
+		allPolicies, err = sshman.AddCertificatePolicy(allPolicies, sshman.CertificatePolicy{
+			ID:              "policy_1",
+			RequesterID:     "requester_1",
+			CertificateType: sshman.UserCert,
+			ValidUser:       "sshuser",
+			ValidHostAlias:  "host_1",
+			ValidAfter:      time.Now(),
+			ValidBefore:     time.Now().Add(userInput.duration),
+			CriticalOptions: map[string]string{
+				"source-address": "127.0.0.1",
+			},
+		})
+		if err != nil {
+			t.Fatalf("error adding user certificate policy: %v", err)
+		}
+
+		allPolicies, err = sshman.AddCertificatePolicy(allPolicies, sshman.CertificatePolicy{
+			ID:              "policy_2",
+			RequesterID:     "requester_2",
+			CertificateType: sshman.HostCert,
+			ValidHostAlias:  "host_1",
+			ValidAfter:      time.Now(),
+			ValidBefore:     time.Now().Add(hostInput.duration),
+		})
+		if err != nil {
+			t.Fatalf("error adding host certificate policy: %v", err)
+		}
+
+		if err := sshman.SaveCertificatePolicies(certificatePoliciesFilePath, allPolicies); err != nil {
+			t.Fatalf("error saving certificate policies: %v", err)
+		}
+
+		userCertificateRequest := sshman.CertificateRequest{
+			RequesterID:        "requester_1",
+			RequesterPublicKey: userSSHKeyPair.PublicKey,
+			RequestedUser:      "sshuser",
+			RequestedHost:      "host_1",
+			CertificateType:    sshman.UserCert,
+		}
+
+		hostCertificateRequest := sshman.CertificateRequest{
+			RequesterID:        "requester_2",
+			RequesterPublicKey: hostSSHKeyPair.PublicKey,
+			RequestedHost:      "host_1",
+			CertificateType:    sshman.HostCert,
+		}
+
+		if err := userCertificateRequest.Sign(cryptorand.Reader, userAuthenticationKeyPair); err != nil {
 			t.Fatalf("error signing user certificate request: %v", err)
 		}
 
-		hostCertificateBytes, err := hostCertificateRequest.SignCertificateRequest(reader, hostInput.ca, time.Now(), time.Now().Add(userInput.duration))
-		if err != nil {
+		if err := hostCertificateRequest.Sign(cryptorand.Reader, hostAuthenticationKeyPair); err != nil {
 			t.Fatalf("error signing host certificate request: %v", err)
 		}
 
-		generatedUserSSH, err := userKeyPair.NewSSH(userCertificateBytes)
+		userCertificateRequestBytes, err := userCertificateRequest.Marshal()
+		if err != nil {
+			t.Fatalf("error marshaling user certificate request: %v", err)
+		}
+
+		hostCertificateRequestBytes, err := hostCertificateRequest.Marshal()
+		if err != nil {
+			t.Fatalf("error marshaling host certificate request: %v", err)
+		}
+
+		data, _ = os.ReadFile(authorizedRequestersFilePath)
+		t.Log(string(data))
+
+		data, _ = os.ReadFile(certificatePoliciesFilePath)
+		t.Log(string(data))
+
+		userCertificates, err := sshman.CreateCertificate(userInput.ca, userCertificateRequestBytes, authorizedRequestersFilePath, authorizedHostsFilePath, certificatePoliciesFilePath)
+		if err != nil {
+			t.Fatalf("error creating user certificate: %v", err)
+		}
+
+		hostCertificates, err := sshman.CreateCertificate(hostInput.ca, hostCertificateRequestBytes, authorizedRequestersFilePath, authorizedHostsFilePath, certificatePoliciesFilePath)
+		if err != nil {
+			t.Fatalf("error creating host certificate: %v", err)
+		}
+
+		generatedUserSSH, err := userSSHKeyPair.NewSSH(userCertificates[0])
 		if err != nil {
 			t.Fatalf("error creating new SSH user asset from user key pair and its certificate: %v", err)
 		}
 
-		generatedHostSSH, err := hostKeyPair.NewSSH(hostCertificateBytes)
+		generatedHostSSH, err := hostSSHKeyPair.NewSSH(hostCertificates[0])
 		if err != nil {
 			t.Fatalf("error creating new SSH host asset from host key pair and its certificate: %v", err)
 		}
@@ -172,12 +292,21 @@ func FuzzPackage(f *testing.F) {
 			certificatePath = filepath.Join(userSSHDir, "id_rsa-cert.pub")
 		}
 
-		if _, err := sshman.AddHostToClientConfig(subject, clientConfigPath, privateKeyPath, certificatePath); err != nil {
-			t.Fatalf("error adding host private key and certificate to client config: %v", err)
+		allBlocks, err := sshman.LoadClientConfigBlocks(clientConfigPath)
+		if err != nil {
+			t.Fatalf("error loading client config block: %v", err)
 		}
 
-		if err := sshman.DeleteHostFromClientConfig(subject, clientConfigPath); err != nil {
-			t.Fatalf("error deleting host from client config: %v", err)
+		if _, err := sshman.AddClientConfigBlock(allBlocks, sshman.ClientConfigBlock{
+			ID:              "host_1",
+			User:            "sshuser",
+			Address:         "127.0.0.1",
+			Port:            port,
+			IdentityFile:    privateKeyPath,
+			IdentitiesOnly:  true,
+			CertificateFile: certificatePath,
+		}); err != nil {
+			t.Fatalf("error adding host private key and certificate to client config: %v", err)
 		}
 
 		if err := sshman.TestSSH(userSSH, hostSSH, userInput.ca.PublicKey, hostInput.ca.PublicKey); err != nil {
