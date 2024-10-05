@@ -10,15 +10,15 @@ import (
 )
 
 type CertificatePolicy struct {
-	ID              string
-	RequesterID     string
-	CertificateType CertificateType
-	ValidUser       string `json:"ValidUser,omitempty"`
-	ValidHostAlias  string
-	ValidAfter      time.Time
-	ValidBefore     time.Time
-	CriticalOptions map[string]string
-	Extensions      map[string]string
+	ID              string            `json:"id"`
+	RequesterID     string            `json:"requester_id"`
+	Type            string            `json:"type"`
+	ValidUser       string            `json:"user,omitempty"`
+	ValidHostID     string            `json:"host_id"`
+	ValidAfter      time.Time         `json:"valid_after"`
+	ValidBefore     time.Time         `json:"valid_before"`
+	CriticalOptions map[string]string `json:"critical_options"`
+	Extensions      map[string]string `json:"extensions"`
 }
 
 func AddCertificatePolicy(allPolicies []CertificatePolicy, policy CertificatePolicy) ([]CertificatePolicy, error) {
@@ -26,7 +26,10 @@ func AddCertificatePolicy(allPolicies []CertificatePolicy, policy CertificatePol
 		return nil, fmt.Errorf("invalid policy: %w", err)
 	}
 
-	allPolicies = DeleteCertificatePolicy(allPolicies, policy)
+	found := FindCertificatePolicies(allPolicies, policy.Type, policy.RequesterID, policy.ValidUser, policy.ValidHostID)
+	for _, foundPolicy := range found {
+		allPolicies = DeleteCertificatePolicy(allPolicies, foundPolicy)
+	}
 
 	allPolicies = append(allPolicies, policy)
 
@@ -40,12 +43,16 @@ func ValidateCertificatePolicy(policy CertificatePolicy) error {
 		errs = append(errs, errors.New("empty requester"))
 	}
 
-	if policy.CertificateType == UserCert {
+	if policy.Type != UserCert.String() && policy.Type != HostCert.String() {
+		errs = append(errs, fmt.Errorf("invalid type \"%s\"", policy.Type))
+	}
+
+	if policy.Type == UserCert.String() {
 		if policy.ValidUser == "" {
 			errs = append(errs, errors.New("empty user"))
 		}
 
-		if policy.ValidHostAlias == "" {
+		if policy.ValidHostID == "" {
 			errs = append(errs, errors.New("empty host alias"))
 		}
 
@@ -70,11 +77,11 @@ func ValidateCertificatePolicy(policy CertificatePolicy) error {
 }
 
 func DeleteCertificatePolicy(allPolicies []CertificatePolicy, policy CertificatePolicy) []CertificatePolicy {
-	foundPolicies := FindCertificatePolicies(allPolicies, policy.CertificateType, policy.RequesterID, policy.ValidUser, policy.ValidHostAlias)
+	foundPolicies := FindCertificatePolicies(allPolicies, policy.Type, policy.RequesterID, policy.ValidUser, policy.ValidHostID)
 
 	for i, policy := range allPolicies {
 		for _, foundPolicy := range foundPolicies {
-			if policy.RequesterID == foundPolicy.RequesterID && policy.ValidUser == foundPolicy.ValidUser && policy.ValidHostAlias == foundPolicy.ValidHostAlias {
+			if policy.RequesterID == foundPolicy.RequesterID && policy.ValidUser == foundPolicy.ValidUser && policy.ValidHostID == foundPolicy.ValidHostID {
 				allPolicies = append(allPolicies[:i], allPolicies[i+1:]...)
 			}
 		}
@@ -140,12 +147,12 @@ func LoadCertificatePolicies(certificatePoliciesFilePath string) ([]CertificateP
 	return policies, nil
 }
 
-func FindCertificatePolicies(allPolicies []CertificatePolicy, certificateType CertificateType, requester, user, host string) []CertificatePolicy {
+func FindCertificatePolicies(allPolicies []CertificatePolicy, policyType string, requester, user, host string) []CertificatePolicy {
 	var policies []CertificatePolicy
 
 	if requester != "" && host != "" {
 		for _, policy := range allPolicies {
-			if policy.RequesterID == requester && policy.ValidHostAlias == host {
+			if policy.RequesterID == requester && policy.ValidHostID == host {
 				policies = append(policies, policy)
 			}
 		}
@@ -157,7 +164,7 @@ func FindCertificatePolicies(allPolicies []CertificatePolicy, certificateType Ce
 		}
 	} else if requester == "" && host != "" {
 		for _, policy := range allPolicies {
-			if policy.ValidHostAlias == host {
+			if policy.ValidHostID == host {
 				policies = append(policies, policy)
 			}
 		}
@@ -167,7 +174,7 @@ func FindCertificatePolicies(allPolicies []CertificatePolicy, certificateType Ce
 
 	var userPolicies []CertificatePolicy
 
-	if certificateType == UserCert {
+	if policyType == UserCert.String() {
 		if user != "" {
 			for _, policy := range policies {
 				if policy.ValidUser == user {

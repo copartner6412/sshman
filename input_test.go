@@ -1,6 +1,7 @@
 package sshman_test
 
 import (
+	cryptorand "crypto/rand"
 	"errors"
 	"fmt"
 	"math/rand/v2"
@@ -77,9 +78,7 @@ func pseudorandomCA(r *rand.Rand) (*sshman.KeyPair, error) {
 		return nil, fmt.Errorf("error generating pseudo-random password: %v", err)
 	}
 
-	reader := pseudorandom.New(r)
-
-	ca, err := sshman.GenerateKeyPair(reader, caAlgorithm, comment, []byte(password))
+	ca, err := sshman.GenerateKeyPair(cryptorand.Reader, caAlgorithm, comment, []byte(password))
 	if err != nil {
 		return nil, fmt.Errorf("error generating random key pair: %v", err)
 	}

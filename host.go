@@ -14,15 +14,11 @@ import (
 )
 
 type Host struct {
-	ID         string
-	IPv4s      []string
-	IPv6s      []string
-	Domains    []string
-	PublicKeys [][]byte
-	Port       uint16
-	Users      []string
-	Hostname   string
-	SSHAddress string
+	ID            string   `json:"id"`
+	SSHAddresses  []string `json:"addresses"`
+	SSHPublicKeys [][]byte `json:"public_keys"`
+	SSHUsers      []string `json:"users"`
+	SSHPort       uint16   `json:"port"`
 }
 
 func AddHost(allHosts []Host, host Host) ([]Host, error) {
@@ -30,7 +26,7 @@ func AddHost(allHosts []Host, host Host) ([]Host, error) {
 		return nil, fmt.Errorf("invalid host: %w", err)
 	}
 
-	found := FindHosts(allHosts, host.ID, host.IPv4s, host.IPv6s, host.Domains, host.PublicKeys)
+	found := FindHosts(allHosts, host.ID, host.SSHAddresses, host.SSHPublicKeys)
 
 	for _, foundHost := range found {
 		allHosts = DeleteHost(allHosts, foundHost)
@@ -44,35 +40,19 @@ func AddHost(allHosts []Host, host Host) ([]Host, error) {
 func ValidateHost(host Host) error {
 	var errs []error
 
-	for _, ipv4 := range host.IPv4s {
-		if err := validate.IP(ipv4, ""); err != nil {
-			errs = append(errs, fmt.Errorf("invalid ipv4 \"%s\": %w", ipv4, err))
+	for _, address := range host.SSHAddresses {
+		err1 := validate.IP(address, "")
+		err2 := validate.Domain(address, 0, 0)
+		if err1 != nil && err2 != nil {
+			return fmt.Errorf("invalid SSH address \"%s\": %w", address, errors.Join(errs...))
 		}
 	}
 
-	for _, ipv6 := range host.IPv6s {
-		if err := validate.IP(ipv6, ""); err != nil {
-			errs = append(errs, fmt.Errorf("invalid ipv6 \"%s\": %w", ipv6, err))
-		}
-	}
-
-	for _, domain := range host.Domains {
-		if err := validate.Domain(domain, 0, 0); err != nil {
-			errs = append(errs, fmt.Errorf("invalid domain \"%s\": %w", domain, err))
-		}
-	}
-
-	for _, publicKey := range host.PublicKeys {
+	for _, publicKey := range host.SSHPublicKeys {
 		if _, _, _, _, err := ssh.ParseAuthorizedKey(publicKey); err != nil {
 			errs = append(errs, fmt.Errorf("invalid public key: %w", err))
 		}
 
-	}
-
-	err1 := validate.IP(host.SSHAddress, "")
-	err2 := validate.Domain(host.SSHAddress, 0, 0)
-	if err1 != nil && err2 != nil {
-		errs = append(errs, fmt.Errorf("invalid ssh address \"%s\"", host.SSHAddress))
 	}
 
 	if len(errs) > 0 {
@@ -83,7 +63,7 @@ func ValidateHost(host Host) error {
 }
 
 func DeleteHost(allHosts []Host, host Host) []Host {
-	found := FindHosts(allHosts, host.ID, host.IPv4s, host.IPv6s, host.Domains, host.PublicKeys)
+	found := FindHosts(allHosts, host.ID, host.SSHAddresses, host.SSHPublicKeys)
 
 	for i, host := range allHosts {
 		for _, deleteHost := range found {
@@ -168,58 +148,36 @@ func LoadHosts(authorizedHostsFilePath string) ([]Host, error) {
 	return hosts, nil
 }
 
-func FindHosts(allHosts []Host, ID string, ipv4s, ipv6s, domains []string, publicKeys [][]byte) (found []Host) {
-	hostsByAlias := make(map[string]Host)
-	hostsByIPv4 := make(map[string]Host)
-	hostsByIPv6 := make(map[string]Host)
-	hostsByDomain := make(map[string]Host)
-	hostsByPublicKey := make(map[string]Host)
+func FindHosts(allHosts []Host, id string, addresses []string, publicKeys [][]byte) (found []Host) {
+	hostsByID := make(map[string]Host)
+	hostsBySSHAddress := make(map[string]Host)
+	hostsBySSHPublicKey := make(map[string]Host)
 	similar := make(map[string]Host)
 
 	for _, host := range allHosts {
-		hostsByAlias[host.ID] = host
-		for _, ipv4 := range host.IPv4s {
-			hostsByIPv4[ipv4] = host
+		hostsByID[host.ID] = host
+		for _, address := range host.SSHAddresses {
+			hostsBySSHAddress[address] = host
 		}
-		for _, ipv6 := range host.IPv6s {
-			hostsByIPv6[ipv6] = host
-		}
-		for _, domain := range host.Domains {
-			hostsByDomain[domain] = host
-		}
-		for _, publicKey := range host.PublicKeys {
+		for _, publicKey := range host.SSHPublicKeys {
 			publicKey = bytes.TrimSpace(publicKey)
-			hostsByPublicKey[string(publicKey)] = host
+			hostsBySSHPublicKey[string(publicKey)] = host
 		}
 	}
 
-	if ID != "" {
-		if host, ok := hostsByAlias[ID]; ok {
-			similar[host.ID] = host
-		}
+	if host, ok := hostsByID[id]; id != "" && ok {
+		similar[host.ID] = host
 	}
 
-	for _, ipv4 := range ipv4s {
-		if host, ok := hostsByIPv4[ipv4]; ok {
-			similar[host.ID] = host
-		}
-	}
-
-	for _, ipv6 := range ipv6s {
-		if host, ok := hostsByIPv4[ipv6]; ok {
-			similar[host.ID] = host
-		}
-	}
-
-	for _, domain := range domains {
-		if host, ok := hostsByIPv4[domain]; ok {
+	for _, address := range addresses {
+		if host, ok := hostsBySSHAddress[address]; ok {
 			similar[host.ID] = host
 		}
 	}
 
 	for _, publicKey := range publicKeys {
 		publicKey = bytes.TrimSpace(publicKey)
-		if host, ok := hostsByPublicKey[string(publicKey)]; ok {
+		if host, ok := hostsBySSHPublicKey[string(publicKey)]; ok {
 			similar[host.ID] = host
 		}
 	}

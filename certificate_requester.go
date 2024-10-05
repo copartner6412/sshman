@@ -13,15 +13,15 @@ import (
 )
 
 type CertificateRequester struct {
-	ID              string
-	Name            string
-	PublicKey       []byte
-	CertificateType CertificateType
+	ID                      string `json:"id"`
+	Name                    string `json:"name,omitempty"`
+	AuthenticationPublicKey []byte `json:"public_key"`
+	Type                    string `json:"type"`
 }
 
 func SaveCertificateRequesters(authorizedRequestersFilePath string, allRequesters []CertificateRequester) error {
 	if !filepath.IsAbs(authorizedRequestersFilePath) {
-		return fmt.Errorf("apth to authorized requesters file \"%s\" is not an absolute path", authorizedRequestersFilePath)
+		return fmt.Errorf("path to authorized requesters file \"%s\" is not an absolute path", authorizedRequestersFilePath)
 	}
 
 	directory := filepath.Dir(authorizedRequestersFilePath)
@@ -72,7 +72,6 @@ func LoadCertificateRequesters(authorizedRequestersFilePath string) ([]Certifica
 	}
 
 	permission := info.Mode().Perm()
-
 	if permission != 0600 {
 		return nil, fmt.Errorf("inappropriate permission %d for authorized requesters file \"%s\": chmod to 600", permission, authorizedRequestersFilePath)
 	}
@@ -96,11 +95,10 @@ func AddCertificateRequester(allRequesters []CertificateRequester, requester Cer
 		return nil, fmt.Errorf("invalid requester: %w", err)
 	}
 
-	//found := FindCertificateRequesters(allRequesters, requester.ID, "", requester.PublicKey)
-
-	//for _, foundRequester := range found {
-	//	allRequesters = DeleteCertificateRequester(allRequesters, foundRequester)
-	//}
+	found := FindCertificateRequesters(allRequesters, requester.ID, "", nil)
+	for _, foundRequester := range found {
+		allRequesters = DeleteCertificateRequester(allRequesters, foundRequester)
+	}
 
 	return append(allRequesters, requester), nil
 }
@@ -111,7 +109,11 @@ func ValidateCertificateRequester(requester CertificateRequester) error {
 		errs = append(errs, errors.New("empty username"))
 	}
 
-	if _, _, _, _, err := ssh.ParseAuthorizedKey(requester.PublicKey); err != nil {
+	if requester.Type != UserCert.String() && requester.Type != HostCert.String() {
+		errs = append(errs, fmt.Errorf("invalid type \"%s\"", requester.Type))
+	}
+
+	if _, _, _, _, err := ssh.ParseAuthorizedKey(requester.AuthenticationPublicKey); err != nil {
 		errs = append(errs, fmt.Errorf("invalid public key: %w", err))
 	}
 
@@ -124,7 +126,7 @@ func ValidateCertificateRequester(requester CertificateRequester) error {
 
 func DeleteCertificateRequester(allRequesters []CertificateRequester, deleteRequester CertificateRequester) []CertificateRequester {
 	for i, requester := range allRequesters {
-		if requester.ID == deleteRequester.ID && bytes.Equal(requester.PublicKey, deleteRequester.PublicKey) {
+		if requester.ID == deleteRequester.ID && bytes.Equal(requester.AuthenticationPublicKey, deleteRequester.AuthenticationPublicKey) {
 			allRequesters = append(allRequesters[:i], allRequesters[i+1:]...)
 		}
 	}
@@ -143,25 +145,20 @@ func FindCertificateRequesters(allRequesters []CertificateRequester, id, name st
 	for _, requester := range allRequesters {
 		requestersByID[requester.ID] = requester
 		requestersByName[requester.Name] = requester
+		publicKey = bytes.TrimSpace(publicKey)
 		requestersByPublicKey[string(publicKey)] = requester
 	}
 
-	if id != "" {
-		if requester, ok := requestersByID[id]; ok {
-			similar[requester.ID] = requester
-		}
+	if requester, ok := requestersByID[id]; id != "" && ok {
+		similar[requester.ID] = requester
 	}
 
-	if name != "" {
-		if requester, ok := requestersByName[name]; ok {
-			similar[requester.ID] = requester
-		}
+	if requester, ok := requestersByName[name]; name != "" && ok {
+		similar[requester.ID] = requester
 	}
 
-	if publicKey != nil {
-		if requester, ok := requestersByPublicKey[string(publicKey)]; ok {
-			similar[requester.ID] = requester
-		}
+	if requester, ok := requestersByPublicKey[string(publicKey)]; len(publicKey) != 0 && ok {
+		similar[requester.ID] = requester
 	}
 
 	var ids []string

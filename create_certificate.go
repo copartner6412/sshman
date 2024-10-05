@@ -36,11 +36,11 @@ func CreateCertificate(ca *KeyPair, requestBytes []byte, authorizedRequestersFil
 		return nil, fmt.Errorf("no authorized requester with ID \"%s\"", request.RequesterID)
 	}
 
-	if err := request.Authenticate(requesters[0].PublicKey); err != nil {
+	if err := request.Authenticate(requesters[0].AuthenticationPublicKey); err != nil {
 		return nil, fmt.Errorf("public key authentication for requester \"%s\" with ID \"%s\" failed: %w", requesters[0].Name, requesters[0].ID, err)
 	}
 
-	policies := FindCertificatePolicies(allPolicies, request.CertificateType, request.RequesterID, request.RequestedUser, request.RequestedHost)
+	policies := FindCertificatePolicies(allPolicies, request.CertificateType.String(), request.RequesterID, request.RequestedUser, request.RequestedHost)
 	if len(policies) == 0 {
 		return nil, fmt.Errorf("no policy for request with requster ID \"%s\", requested user \"%s\", and requested host \"%s\"", request.RequesterID, request.RequestedUser, request.RequestedHost)
 	}
@@ -60,7 +60,7 @@ func CreateCertificate(ca *KeyPair, requestBytes []byte, authorizedRequestersFil
 		return nil, fmt.Errorf("error loading hosts: %w", err)
 	}
 
-	hosts := FindHosts(allHosts, request.RequestedHost, []string{request.RequestedHost}, []string{request.RequestedHost}, []string{request.RequestedHost}, nil)
+	hosts := FindHosts(allHosts, request.RequestedHost, []string{request.RequestedHost}, nil)
 	if len(hosts) == 0 {
 		return nil, fmt.Errorf("no host for specified identifier \"%s\"", request.RequestedHost)
 	} else if len(hosts) > 1 {
@@ -85,8 +85,8 @@ func CreateCertificate(ca *KeyPair, requestBytes []byte, authorizedRequestersFil
 			certificate.CertType = ssh.UserCert
 			certificate.KeyId = strings.Join([]string{"user", request.RequesterID, request.RequestedUser + "@" + request.RequestedHost, publicKey.Type()}, "_")
 			certificate.ValidPrincipals = []string{policy.ValidUser}
-			if policy.CriticalOptions["source-address"] != hosts[0].SSHAddress {
-				return nil, fmt.Errorf("invalid source address \"%s\" for user certificate policy \"%s\"", hosts[0].SSHAddress, policy.ID)
+			if policy.CriticalOptions["source-address"] != hosts[0].SSHAddresses[0] {
+				return nil, fmt.Errorf("invalid source address \"%s\" for user certificate policy \"%s\"", hosts[0].SSHAddresses[0], policy.ID)
 			}
 		} else {
 			certificate.CertType = ssh.HostCert

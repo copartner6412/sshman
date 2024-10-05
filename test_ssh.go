@@ -99,12 +99,12 @@ func TestSSH(sshUser, sshHost *SSH, userCAPublicKeyBytes, hostCAPublicKeyBytes [
 	}
 	defer listener.Close()
 
-	var wg sync.WaitGroup
+	var wg1, wg2 sync.WaitGroup
 
-	wg.Add(1)
+	wg1.Add(1)
 
 	go func() {
-		wg.Done()
+		wg1.Done()
 		conn, err := listener.Accept()
 		if err != nil {
 			return
@@ -121,13 +121,20 @@ func TestSSH(sshUser, sshHost *SSH, userCAPublicKeyBytes, hostCAPublicKeyBytes [
 			_, _, _ = newChannel.Accept()
 		}
 	}()
-	wg.Wait()
+	wg1.Wait()
 
-	conn, err := ssh.Dial("tcp", listener.Addr().String(), clientConfig)
-	if err != nil {
-		return fmt.Errorf("failed to dial the server: %v", err)
-	}
-	defer conn.Close()
+	wg2.Add(1)
+
+	go func() {
+		conn, err := ssh.Dial("tcp", listener.Addr().String(), clientConfig)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		wg2.Done()
+	}()
+
+	wg2.Wait()
 
 	return nil
 }
