@@ -9,12 +9,12 @@ import (
 )
 
 type CertificateRequest struct {
-	CertificateRequesterUsername  string          `asn1:"utf8"`
-	CertificateRequesterPublicKey []byte          `asn1:"octet"`
-	RequestedUser                 string          `asn1:"utf8,omitempty"`
-	RequestedHost                 string          `asn1:"utf8"`
-	CertificateType               CertificateType `asn1:"tag:1"`
-	Signature                     []byte          `asn1:"octet"`
+	CertificateRequesterUsername  string                   `asn1:"utf8"`
+	CertificateRequesterPublicKey []byte                   `asn1:"octet"`
+	RequestedUser                 string                   `asn1:"utf8,omitempty"`
+	RequestedHost                 string                   `asn1:"utf8"`
+	CertificateRequesterType      CertificateRequesterType `asn1:"tag:1"`
+	Signature                     []byte                   `asn1:"octet"`
 }
 
 func (cr CertificateRequest) Marshal() ([]byte, error) {
@@ -44,17 +44,17 @@ func (cr *CertificateRequest) Sign(randomness io.Reader, authenticationKeyPair *
 
 func marshalCertificateRequestWithoutSignature(certificateRequest *CertificateRequest) ([]byte, error) {
 	crCopy := struct {
-		CertificateRequesterID        string          `asn1:"utf8"`
-		CertificateRequesterPublicKey []byte          `asn1:"octet"`
-		RequestedUser                 string          `asn1:"utf8,omitempty"`
-		RequestedHost                 string          `asn1:"utf8,omitempty"`
-		CertificateType               CertificateType `asn1:"tag:1"`
+		CertificateRequesterID        string                   `asn1:"utf8"`
+		CertificateRequesterPublicKey []byte                   `asn1:"octet"`
+		RequestedUser                 string                   `asn1:"utf8,omitempty"`
+		RequestedHost                 string                   `asn1:"utf8,omitempty"`
+		CertificateType               CertificateRequesterType `asn1:"tag:1"`
 	}{
 		CertificateRequesterID:        certificateRequest.CertificateRequesterUsername,
 		CertificateRequesterPublicKey: certificateRequest.CertificateRequesterPublicKey,
 		RequestedUser:                 certificateRequest.RequestedUser,
 		RequestedHost:                 certificateRequest.RequestedHost,
-		CertificateType:               certificateRequest.CertificateType,
+		CertificateType:               certificateRequest.CertificateRequesterType,
 	}
 
 	return asn1.Marshal(crCopy)
