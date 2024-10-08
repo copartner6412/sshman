@@ -152,13 +152,13 @@ func FuzzPackage(f *testing.F) {
 		}
 
 		allPolicies, err = sshman.AddCertificatePolicy(allPolicies, sshman.CertificatePolicy{
-			ID:          "policy_1",
-			RequesterID: "requester_1",
-			Type:        sshman.UserCert.String(),
-			ValidUser:   "sshuser",
-			ValidHostID: "host_1",
-			ValidAfter:  time.Now(),
-			ValidBefore: time.Now().Add(userInput.duration),
+			ID:                     "policy_1",
+			CertificateRequesterID: "requester_1",
+			Type:                   sshman.UserCert.String(),
+			ValidUser:              "sshuser",
+			HostID:                 "host_1",
+			ValidAfter:             time.Now(),
+			ValidBefore:            time.Now().Add(userInput.duration),
 			CriticalOptions: map[string]string{
 				"source-address": "127.0.0.1",
 			},
@@ -168,12 +168,12 @@ func FuzzPackage(f *testing.F) {
 		}
 
 		allPolicies, err = sshman.AddCertificatePolicy(allPolicies, sshman.CertificatePolicy{
-			ID:          "policy_2",
-			RequesterID: "requester_2",
-			Type:        sshman.HostCert.String(),
-			ValidHostID: "host_1",
-			ValidAfter:  time.Now(),
-			ValidBefore: time.Now().Add(hostInput.duration),
+			ID:                     "policy_2",
+			CertificateRequesterID: "requester_2",
+			Type:                   sshman.HostCert.String(),
+			HostID:                 "host_1",
+			ValidAfter:             time.Now(),
+			ValidBefore:            time.Now().Add(hostInput.duration),
 		})
 		if err != nil {
 			t.Fatalf("error adding host certificate policy: %v", err)
@@ -184,18 +184,18 @@ func FuzzPackage(f *testing.F) {
 		}
 
 		userCertificateRequest := sshman.CertificateRequest{
-			RequesterID:        "requester_1",
-			RequesterPublicKey: userSSHKeyPair.PublicKey,
-			RequestedUser:      "sshuser",
-			RequestedHost:      "host_1",
-			CertificateType:    sshman.UserCert,
+			CertificateRequesterID:        "requester_1",
+			CertificateRequesterPublicKey: userSSHKeyPair.PublicKey,
+			RequestedUser:                 "sshuser",
+			RequestedHost:                 "host_1",
+			CertificateType:               sshman.UserCert,
 		}
 
 		hostCertificateRequest := sshman.CertificateRequest{
-			RequesterID:        "requester_2",
-			RequesterPublicKey: hostSSHKeyPair.PublicKey,
-			RequestedHost:      "host_1",
-			CertificateType:    sshman.HostCert,
+			CertificateRequesterID:        "requester_2",
+			CertificateRequesterPublicKey: hostSSHKeyPair.PublicKey,
+			RequestedHost:                 "host_1",
+			CertificateType:               sshman.HostCert,
 		}
 
 		if err := userCertificateRequest.Sign(cryptorand.Reader, userAuthenticationKeyPair); err != nil {
@@ -222,12 +222,27 @@ func FuzzPackage(f *testing.F) {
 		data, _ = os.ReadFile(certificatePoliciesFilePath)
 		t.Log(string(data))
 
-		userCertificates, err := sshman.CreateCertificate(userInput.ca, userCertificateRequestBytes, authorizedRequestersFilePath, authorizedHostsFilePath, certificatePoliciesFilePath)
+		allPolicies, err = sshman.LoadCertificatePolicies(certificatePoliciesFilePath)
+		if err != nil {
+			t.Fatalf("error loading certificate policies: %v", err)
+		}
+
+		allHosts, err = sshman.LoadHosts(authorizedHostsFilePath)
+		if err != nil {
+			t.Fatalf("error loading authorized hosts file: %v", err)
+		}
+
+		allRequesters, err = sshman.LoadCertificateRequesters(authorizedRequestersFilePath)
+		if err != nil {
+			t.Fatalf("error loading authorized requesters: %v", err)
+		}
+
+		userCertificates, err := sshman.CreateCertificate(userInput.ca, userCertificateRequestBytes, allRequesters, allHosts, allPolicies)
 		if err != nil {
 			t.Fatalf("error creating user certificate: %v", err)
 		}
 
-		hostCertificates, err := sshman.CreateCertificate(hostInput.ca, hostCertificateRequestBytes, authorizedRequestersFilePath, authorizedHostsFilePath, certificatePoliciesFilePath)
+		hostCertificates, err := sshman.CreateCertificate(hostInput.ca, hostCertificateRequestBytes, allRequesters, allHosts, allPolicies)
 		if err != nil {
 			t.Fatalf("error creating host certificate: %v", err)
 		}
