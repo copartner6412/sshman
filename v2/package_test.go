@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/copartner6412/input/pseudorandom"
-	"github.com/copartner6412/sshman"
+	"github.com/copartner6412/sshman/v2"
 )
 
 func FuzzPackage(f *testing.F) {

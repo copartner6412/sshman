@@ -17,8 +17,8 @@ type CertificateRequest struct {
 	Signature          []byte          `asn1:"octet"`
 }
 
-func (cr CertificateRequest) Marshal() ([]byte, error) {
-	return asn1.Marshal(cr)
+func (cr *CertificateRequest) Marshal() ([]byte, error) {
+	return asn1.Marshal(*cr)
 }
 
 func (cr *CertificateRequest) Sign(randomness io.Reader, authenticationKeyPair *KeyPair) error {
