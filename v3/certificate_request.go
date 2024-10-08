@@ -13,7 +13,6 @@ type CertificateRequest struct {
 	CertificateRequesterPublicKey []byte          `asn1:"octet"`
 	RequestedUser                 string          `asn1:"utf8,omitempty"`
 	RequestedHost                 string          `asn1:"utf8"`
-	CertificateType               CertificateType `asn1:"tag:1"`
 	Signature                     []byte          `asn1:"octet"`
 }
 
@@ -54,7 +53,6 @@ func marshalCertificateRequestWithoutSignature(certificateRequest *CertificateRe
 		CertificateRequesterPublicKey: certificateRequest.CertificateRequesterPublicKey,
 		RequestedUser:                 certificateRequest.RequestedUser,
 		RequestedHost:                 certificateRequest.RequestedHost,
-		CertificateType:               certificateRequest.CertificateType,
 	}
 
 	return asn1.Marshal(crCopy)
