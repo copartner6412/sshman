@@ -145,7 +145,7 @@ func writeBytesToFile(dir, name, filename string, data []byte, permission os.Fil
 	data = bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
 	data = bytes.TrimSpace(data)
 
-	if err := os.MkdirAll(dir, 700); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("error creating directory %s: %w", dir, err)
 	}
 
