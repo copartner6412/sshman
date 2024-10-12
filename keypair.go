@@ -217,7 +217,7 @@ func (k *KeyPair) SignCertificateRequest(rand io.Reader, CertificateRequestBytes
 
 	certificateRequest, err := ParseCertificateRequest(CertificateRequestBytes)
 	if err != nil {
-		errs = append(errs, fmt.Errorf("error parsing certificate request: %w", err)) 
+		errs = append(errs, fmt.Errorf("error parsing certificate request: %w", err))
 	}
 
 	if len(errs) > 0 {
@@ -235,8 +235,8 @@ func (k *KeyPair) SignCertificateRequest(rand io.Reader, CertificateRequestBytes
 		CertType:        getCertType(certificateRequest.CertificateType),
 		KeyId:           certificateRequest.KeyId,
 		ValidPrincipals: certificateRequest.ValidPrincipals,
-		ValidAfter: 	 uint64(NotBefore.Unix()),
-		ValidBefore: 	 uint64(NotAfter.Unix()),
+		ValidAfter:      uint64(NotBefore.Unix()),
+		ValidBefore:     uint64(NotAfter.Unix()),
 		Permissions:     ssh.Permissions{CriticalOptions: certificateRequest.CriticalOptions, Extensions: certificateRequest.Extensions},
 	}
 

@@ -118,7 +118,6 @@ func pseudorandomSubject(r *rand.Rand) (mockSubject, error) {
 		return mockSubject{}, errors.Join(errs...)
 	}
 
-
 	return mockSubject{
 		user:     user,
 		port:     port,

@@ -66,7 +66,7 @@ func (s *SSH) Parse() (publicKey ssh.PublicKey, privateKey ssh.Signer, certifica
 	if err := sshNotZero(s); err != nil {
 		return nil, nil, nil, err
 	}
-	
+
 	var errs []error
 	var ok bool
 
@@ -110,7 +110,7 @@ func sshNotZero(s *SSH) error {
 	}
 
 	var errs []error
-	
+
 	if len(s.PublicKey) == 0 {
 		errs = append(errs, errors.New("empty byte slice for public key field"))
 	}
@@ -130,7 +130,7 @@ func sshNotZero(s *SSH) error {
 	return nil
 }
 
-func parsePrivateKey(privateKeyBytes,privateKeyPasswordBytes []byte) (privateKey ssh.Signer, err error) {
+func parsePrivateKey(privateKeyBytes, privateKeyPasswordBytes []byte) (privateKey ssh.Signer, err error) {
 	if len(privateKeyPasswordBytes) == 0 {
 		privateKey, err = ssh.ParsePrivateKey(privateKeyBytes)
 		if err != nil {

@@ -235,7 +235,7 @@ func validateDeleteHostFromClienConfigInput(subject Subject, clientConfigPath st
 	}
 
 	if clientConfigPath == "" {
-		errs = append(errs, errors.New("empty string for path to user-specific SSH client configuration file")) 
+		errs = append(errs, errors.New("empty string for path to user-specific SSH client configuration file"))
 		return errors.Join(errs...)
 	}
 
@@ -345,10 +345,10 @@ func validateAddHostToClientConfigInput(subject Subject, clientConfigPath, priva
 
 	for name, path := range paths {
 		if path == "" {
-			errs = append(errs, fmt.Errorf("empty path for %s file", name)) 
+			errs = append(errs, fmt.Errorf("empty path for %s file", name))
 			continue
 		}
-	
+
 		if !filepath.IsAbs(clientConfigPath) {
 			errs = append(errs, fmt.Errorf("path to %s file \"%s\" is not an absolute path", name, clientConfigPath))
 		}

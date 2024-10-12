@@ -6,8 +6,8 @@ import (
 	"fmt"
 )
 
-func ParseCertificateRequest(certificateRequestBytes []byte) (*CertificateRequest, error) {
-	cr := new(CertificateRequest)
+func ParseCertificateRequest(certificateRequestBytes []byte) (*UserCertificateRequest, error) {
+	cr := new(UserCertificateRequest)
 	_, err := asn1.Unmarshal(certificateRequestBytes, cr)
 	if err != nil {
 		return nil, err
