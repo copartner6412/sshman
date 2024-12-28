@@ -9,27 +9,25 @@ import (
 )
 
 type HostCertificatePolicy struct {
-	CertificateRequesterSSHAddress string
-	ValidAfter                     time.Time
-	ValidBefore                    time.Time
-	CriticalOptions                map[string]string
-	Extensions                     map[string]string
+	RequesterAddress string
+	ValidAfter       time.Time
+	ValidBefore      time.Time
+	CriticalOptions  map[string]string
+	Extensions       map[string]string
 }
 
-func ValidateHostCertificatePolicy(policy HostCertificatePolicy) error {
+func (p HostCertificatePolicy) Validate() error {
 	var errs []error
 
-	if policy.CertificateRequesterSSHAddress == "" {
-		errs = append(errs, errors.New("empty SSH address"))
-	} else if err := validateSSHAddress(policy.CertificateRequesterSSHAddress); err != nil {
+	if err := validateSSHAddress(p.RequesterAddress); err != nil {
 		errs = append(errs, fmt.Errorf("invalid SSH address: %w", err))
 	}
 
-	if policy.ValidAfter.IsZero() {
+	if p.ValidAfter.IsZero() {
 		errs = append(errs, errors.New("zero starting time"))
 	}
 
-	if policy.ValidBefore.IsZero() {
+	if p.ValidBefore.IsZero() {
 		errs = append(errs, errors.New("zero ending time"))
 	}
 

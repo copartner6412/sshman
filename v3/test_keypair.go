@@ -18,7 +18,7 @@ func TestKeyPair(keyPair *KeyPair) error {
 	serverConfig := &ssh.ServerConfig{
 		PublicKeyCallback: func(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
 			if bytes.Equal(key.Marshal(), publicKey.Marshal()) {
-				return nil, fmt.Errorf("user authentication fialed")
+				return nil, fmt.Errorf("user authentication failed")
 			}
 
 			return &ssh.Permissions{}, nil

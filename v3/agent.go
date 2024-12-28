@@ -11,10 +11,13 @@ import (
 )
 
 func AddKeyToSSHAgent[T any](input T) (err error) {
-	var privateKeyBytes []byte
-	var privateKeyPasswordBytes []byte
-	var privateKey crypto.PrivateKey
-	var certificate *ssh.Certificate
+	var (
+		privateKeyBytes         []byte
+		privateKeyPasswordBytes []byte
+		privateKey              crypto.PrivateKey
+		certificate             *ssh.Certificate
+	)
+
 	switch inputTypeAsserted := any(input).(type) {
 	case *KeyPair:
 		_, _, err = inputTypeAsserted.Parse()
@@ -33,7 +36,7 @@ func AddKeyToSSHAgent[T any](input T) (err error) {
 		privateKeyPasswordBytes = inputTypeAsserted.PrivateKeyPassword
 
 	default:
-		return fmt.Errorf("unsupport input type %T: only sshman.KeyPair or sshman.SSH", input)
+		return fmt.Errorf("unsupported input type %T: only sshman.KeyPair or sshman.SSH", input)
 	}
 
 	if privateKeyPasswordBytes != nil {
@@ -48,23 +51,19 @@ func AddKeyToSSHAgent[T any](input T) (err error) {
 		}
 	}
 
-	// Get the SSH agent socket path from the environment
 	socket := os.Getenv("SSH_AUTH_SOCK")
 	if socket == "" {
 		return fmt.Errorf("SSH_AUTH_SOCK environment variable not set")
 	}
 
-	// Connect to the SSH agent
 	conn, err := net.Dial("unix", socket)
 	if err != nil {
 		return fmt.Errorf("error connecting to SSH agent: %w", err)
 	}
 	defer conn.Close()
 
-	// Create a new agent client
 	agentClient := agent.NewClient(conn)
 
-	// Add the private key to the agent
 	agentAddKey := agent.AddedKey{
 		PrivateKey: privateKey,
 	}

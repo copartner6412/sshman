@@ -1,7 +1,7 @@
 package sshman
 
 import (
-	"encoding/asn1"
+	"encoding/json"
 	"fmt"
 	"io"
 
@@ -9,25 +9,17 @@ import (
 )
 
 type UserCertificateRequest struct {
-	CertificateRequesterUsername  string `asn1:"utf8"`
-	CertificateRequesterPublicKey []byte `asn1:"octet"`
-	RequestedUser                 string `asn1:"utf8,omitempty"`
-	RequestedHost                 string `asn1:"utf8,omitempty"`
-	Signature                     []byte `asn1:"octet"`
+	RequesterUsername  string `json:"username"`
+	RequesterPublicKey []byte `json:"public_key"`
+	RequestedUser      string `json:"user,omitempty"`
+	RequestedHost      string `json:"host,omitempty"`
+	Signature          []byte `json:"-"`
 }
 
 type HostCertificateRequest struct {
-	CertificateRequesterSSHAddress string `asn1:"utf8"`
-	CertificateRequesterPublicKey  []byte `asn1:"octet"`
-	Signature                      []byte `asn1:"octet"`
-}
-
-func (cr *UserCertificateRequest) Marshal() ([]byte, error) {
-	return asn1.Marshal(*cr)
-}
-
-func (cr *HostCertificateRequest) Marshal() ([]byte, error) {
-	return asn1.Marshal(*cr)
+	RequesterAddress   string `json:"address"`
+	RequesterPublicKey []byte `json:"public_key"`
+	Signature          []byte `json:"-"`
 }
 
 func (cr *UserCertificateRequest) Sign(randomness io.Reader, authenticationKeyPair *KeyPair) error {
@@ -36,7 +28,7 @@ func (cr *UserCertificateRequest) Sign(randomness io.Reader, authenticationKeyPa
 		return fmt.Errorf("error parsing authentication key pair: %w", err)
 	}
 
-	data, err := marshalCertificateRequestWithoutSignature(cr)
+	data, err := json.Marshal(*cr)
 	if err != nil {
 		return fmt.Errorf("error marshaling host certificate request: %w", err)
 	}
@@ -57,7 +49,7 @@ func (cr *HostCertificateRequest) Sign(randomness io.Reader, authenticationKeyPa
 		return fmt.Errorf("error parsing authentication key pair: %w", err)
 	}
 
-	data, err := marshalCertificateRequestWithoutSignature(cr)
+	data, err := json.Marshal(*cr)
 	if err != nil {
 		return fmt.Errorf("error marshaling user certificate request: %w", err)
 	}
@@ -72,37 +64,8 @@ func (cr *HostCertificateRequest) Sign(randomness io.Reader, authenticationKeyPa
 	return nil
 }
 
-func marshalCertificateRequestWithoutSignature(certificateRequest any) ([]byte, error) {
-	switch request := certificateRequest.(type) {
-	case *UserCertificateRequest:
-		crCopy := struct {
-			CertificateRequesterUsername  string `asn1:"utf8"`
-			CertificateRequesterPublicKey []byte `asn1:"octet"`
-			RequestedUser                 string `asn1:"utf8,omitempty"`
-			RequestedHost                 string `asn1:"utf8,omitempty"`
-		}{
-			CertificateRequesterUsername:  request.CertificateRequesterUsername,
-			CertificateRequesterPublicKey: request.CertificateRequesterPublicKey,
-			RequestedUser:                 request.RequestedUser,
-			RequestedHost:                 request.RequestedHost,
-		}
-		return asn1.Marshal(crCopy)
-	case *HostCertificateRequest:
-		crCopy := struct {
-			CertificateRequesterSSHAddress string `asn1:"utf8"`
-			CertificateRequesterPublicKey  []byte `asn1:"octet"`
-		}{
-			CertificateRequesterSSHAddress: request.CertificateRequesterSSHAddress,
-			CertificateRequesterPublicKey:  request.CertificateRequesterPublicKey,
-		}
-		return asn1.Marshal(crCopy)
-	default:
-		return nil, fmt.Errorf("unsupported type %T", certificateRequest)
-	}
-}
-
 func (cr *UserCertificateRequest) Authenticate(authenticationPublicKeyBytes []byte) error {
-	data, err := marshalCertificateRequestWithoutSignature(cr)
+	data, err := json.Marshal(*cr)
 	if err != nil {
 		return fmt.Errorf("error marshaling host certificate request: %w", err)
 	}
@@ -127,7 +90,7 @@ func (cr *UserCertificateRequest) Authenticate(authenticationPublicKeyBytes []by
 }
 
 func (cr *HostCertificateRequest) Authenticate(authenticationPublicKeyBytes []byte) error {
-	data, err := marshalCertificateRequestWithoutSignature(cr)
+	data, err := json.Marshal(*cr)
 	if err != nil {
 		return fmt.Errorf("error marshaling user certificate request: %w", err)
 	}

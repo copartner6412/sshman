@@ -1,7 +1,6 @@
 package sshman
 
 import (
-	"crypto"
 	"encoding/pem"
 	"fmt"
 	"io"
@@ -21,28 +20,7 @@ func GenerateKeyPair(randomness io.Reader, algorithm Algorithm, comment string, 
 		return nil, fmt.Errorf("error converting crypto public key to SSH public key: %w", err)
 	}
 
-	privateKeyPEMBytes, err := encodePrivateKeyToPEMBytes(privateKey, comment, password)
-	if err != nil {
-		return nil, fmt.Errorf("error PEM-encoding private key: %w", err)
-	}
-
-	keyPair := &KeyPair{
-		PublicKey:          ssh.MarshalAuthorizedKey(sshPublicKey),
-		PrivateKey:         privateKeyPEMBytes,
-		PrivateKeyPassword: password,
-	}
-
-	if _, _, err := keyPair.Parse(); err != nil {
-		return nil, fmt.Errorf("invalid key pair generated: %w", err)
-	}
-
-	return keyPair, nil
-}
-
-// encodePrivateKey encodes the private key in PEM format, optionally encrypting it with a password.
-func encodePrivateKeyToPEMBytes(privateKey crypto.PrivateKey, comment string, password []byte) ([]byte, error) {
 	var pemBlock *pem.Block
-	var err error
 
 	switch password {
 	case nil:
@@ -57,5 +35,15 @@ func encodePrivateKeyToPEMBytes(privateKey crypto.PrivateKey, comment string, pa
 		}
 	}
 
-	return pem.EncodeToMemory(pemBlock), nil
+	keyPair := &KeyPair{
+		PublicKey:          ssh.MarshalAuthorizedKey(sshPublicKey),
+		PrivateKey:         pem.EncodeToMemory(pemBlock),
+		PrivateKeyPassword: password,
+	}
+
+	if _, _, err := keyPair.Parse(); err != nil {
+		return nil, fmt.Errorf("invalid key pair generated: %w", err)
+	}
+
+	return keyPair, nil
 }

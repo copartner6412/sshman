@@ -13,13 +13,13 @@ type UserCertificateRequester struct {
 	AuthenticationPublicKey []byte
 }
 
-func ValidateUserCertificateRequester(certificateRequester UserCertificateRequester) error {
+func (cr UserCertificateRequester) Validate() error {
 	var errs []error
-	if certificateRequester.Username == "" {
+	if cr.Username == "" {
 		errs = append(errs, errors.New("empty username"))
 	}
 
-	if _, _, _, _, err := ssh.ParseAuthorizedKey(certificateRequester.AuthenticationPublicKey); err != nil {
+	if _, _, _, _, err := ssh.ParseAuthorizedKey(cr.AuthenticationPublicKey); err != nil {
 		errs = append(errs, fmt.Errorf("error parsing authentication public key: %w", err))
 	}
 

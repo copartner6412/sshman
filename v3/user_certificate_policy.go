@@ -7,41 +7,41 @@ import (
 )
 
 type UserCertificatePolicy struct {
-	CertificateRequesterUsername string
-	ValidHost                    string
-	ValidUser                    string
-	ValidAfter                   time.Time
-	ValidBefore                  time.Time
-	CriticalOptions              map[string]string
-	Extensions                   map[string]string
+	RequesterUsername string
+	ValidHost         string
+	ValidUser         string
+	ValidAfter        time.Time
+	ValidBefore       time.Time
+	CriticalOptions   map[string]string
+	Extensions        map[string]string
 }
 
-func ValidateUserCertificatePolicy(policy UserCertificatePolicy) error {
+func (p UserCertificatePolicy) Validate() error {
 	var errs []error
 
-	if policy.CertificateRequesterUsername == "" {
+	if p.RequesterUsername == "" {
 		errs = append(errs, errors.New("empty certificate requester username"))
 	}
 
-	if policy.ValidHost == "" {
+	if p.ValidHost == "" {
 		errs = append(errs, errors.New("empty host SSH address"))
-	} else if err := validateSSHAddress(policy.ValidHost); err != nil {
+	} else if err := validateSSHAddress(p.ValidHost); err != nil {
 		errs = append(errs, fmt.Errorf("invalid host SSH address: %w", err))
 	}
 
-	if policy.ValidUser == "" {
+	if p.ValidUser == "" {
 		errs = append(errs, errors.New("empty user"))
 	}
 
-	if policy.ValidAfter.IsZero() {
+	if p.ValidAfter.IsZero() {
 		errs = append(errs, errors.New("zero starting time"))
 	}
 
-	if policy.ValidBefore.IsZero() {
+	if p.ValidBefore.IsZero() {
 		errs = append(errs, errors.New("zero ending time"))
 	}
 
-	if policy.CriticalOptions["source-address"] != policy.ValidHost {
+	if p.CriticalOptions["source-address"] != p.ValidHost {
 		errs = append(errs, errors.New("source address mismatch"))
 	}
 

@@ -2,24 +2,24 @@ package sshman
 
 import (
 	"encoding/asn1"
+	"encoding/json"
 	"errors"
 	"fmt"
 )
 
 func ParseUserCertificateRequest(certificateRequestBytes []byte) (*UserCertificateRequest, error) {
 	cr := new(UserCertificateRequest)
-	_, err := asn1.Unmarshal(certificateRequestBytes, cr)
-	if err != nil {
+	if err := json.Unmarshal(certificateRequestBytes, cr); err != nil {
 		return nil, err
 	}
 
 	var errs []error
 
-	if cr.CertificateRequesterUsername == "" {
+	if cr.RequesterUsername == "" {
 		errs = append(errs, errors.New("empty username"))
 	}
 
-	if cr.CertificateRequesterPublicKey == nil {
+	if cr.RequesterPublicKey == nil {
 		errs = append(errs, errors.New("nil public key"))
 	}
 
@@ -43,11 +43,11 @@ func ParseHostCertificateRequest(certificateRequestBytes []byte) (*HostCertifica
 
 	var errs []error
 
-	if cr.CertificateRequesterSSHAddress == "" {
+	if cr.RequesterAddress == "" {
 		errs = append(errs, errors.New("empty SSH address"))
 	}
 
-	if cr.CertificateRequesterPublicKey == nil {
+	if cr.RequesterPublicKey == nil {
 		errs = append(errs, errors.New("nil public key"))
 	}
 

@@ -19,13 +19,7 @@ type SSH struct {
 	NotAfter           time.Time
 }
 
-var filenamesForSave map[string]struct {
-	publicKey, privateKey, certificate string
-} = map[string]struct {
-	publicKey   string
-	privateKey  string
-	certificate string
-}{
+var filenamesForSave = map[string]struct{ publicKey, privateKey, certificate string }{
 	ssh.KeyAlgoED25519:    {"id_ed25519.pub", "id_ed25519", "id_ed25519-cert.pub"},
 	ssh.KeyAlgoSKED25519:  {"id_ed25519_sk.pub", "id_ed25519_sk", "id_ed25519_sk-cert.pub"},
 	ssh.KeyAlgoECDSA521:   {"id_ecdsa.pub", "id_ecdsa", "id_ecdsa-cert.pub"},
@@ -33,15 +27,6 @@ var filenamesForSave map[string]struct {
 	ssh.KeyAlgoECDSA256:   {"id_ecdsa.pub", "id_ecdsa", "id_ecdsa-cert.pub"},
 	ssh.KeyAlgoSKECDSA256: {"id_ecdsa_sk.pub", "id_ecdsa_sk", "id_ecdsa_sk-cert.pub"},
 	ssh.KeyAlgoRSA:        {"id_rsa.pub", "id_rsa", "id_rsa-cert.pub"},
-}
-
-func (s *SSH) Destroy() {
-	s.PublicKey = nil
-	s.PrivateKey = nil
-	s.Certificate = nil
-	s.PrivateKeyPassword = nil
-	s.NotBefore = time.Time{}
-	s.NotAfter = time.Time{}
 }
 
 func (s *SSH) IsZero() bool {

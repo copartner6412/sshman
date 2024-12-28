@@ -11,12 +11,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-var filenamesForLoadKeyPair map[struct {
-	publicKey, privateKey string
-}]map[string]struct{} = map[struct {
-	publicKey  string
-	privateKey string
-}]map[string]struct{}{
+var filenamesForLoadKeyPair = map[struct{ publicKey, privateKey string }]map[string]struct{}{
 	{"id_ed25519.pub", "id_ed25519"}:       {ssh.KeyAlgoED25519: {}},
 	{"id_ed25519_sk.pub", "id_ed25519_sk"}: {ssh.KeyAlgoSKED25519: {}},
 	{"id_ecdsa.pub", "id_ecdsa"}:           {ssh.KeyAlgoECDSA521: {}, ssh.KeyAlgoECDSA384: {}, ssh.KeyAlgoECDSA256: {}},
@@ -30,7 +25,6 @@ func LoadKeyPair(directory string, privateKeyPassword []byte) (*KeyPair, error) 
 	}
 
 	var errs []error
-
 	var publicKeyFilenames []string
 	var privateKeyFilenames []string
 	var certificateFilenames []string

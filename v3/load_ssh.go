@@ -12,13 +12,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-var filenamesForLoadSSH map[struct {
-	publicKey, privateKey, certificate string
-}]map[string]struct{} = map[struct {
-	publicKey   string
-	privateKey  string
-	certificate string
-}]map[string]struct{}{
+var filenamesForLoadSSH = map[struct{ publicKey, privateKey, certificate string }]map[string]struct{}{
 	{"id_ed25519.pub", "id_ed25519", "id_ed25519-cert.pub"}:          {ssh.KeyAlgoED25519: {}},
 	{"id_ed25519_sk.pub", "id_ed25519_sk", "id_ed25519_sk-cert.pub"}: {ssh.KeyAlgoSKED25519: {}},
 	{"id_ecdsa.pub", "id_ecdsa", "id_ecdsa-cert.pub"}:                {ssh.KeyAlgoECDSA521: {}, ssh.KeyAlgoECDSA384: {}, ssh.KeyAlgoECDSA256: {}},
